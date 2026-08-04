@@ -57,6 +57,17 @@
         >
           TDC &amp; PDC Slot Utilization
         </button>
+        <button
+          class="dashboard-view-tab"
+          id="regionalTab"
+          data-dashboard-view="regionalScorecardView"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="regionalScorecardView"
+        >
+          Regional Scorecard
+        </button>
       </nav>
 
       <section class="filter-card" aria-label="Dashboard filters">
@@ -146,260 +157,262 @@
         >
       </div>
 
+      <!-- 1. OVERVIEW VIEW -->
       <main
         id="overviewView"
         role="tabpanel"
         aria-labelledby="overviewTab"
       >
-      <section class="kpi-grid" aria-label="Key performance indicators">
-        <article class="kpi sales">
-          <div class="kpi-label">Gross sales</div>
-          <div class="kpi-value mono" id="kpiSales">—</div>
-          <div class="kpi-rule"></div>
-          <div class="kpi-sub" id="kpiSalesSub">From encoded sales records</div>
-        </article>
-        <article class="kpi target">
-          <div class="kpi-label">Target achievement</div>
-          <div class="kpi-value mono" id="kpiTarget">—</div>
-          <div class="kpi-rule"></div>
-          <div class="kpi-sub" id="kpiTargetSub">
-            Monthly targets in source data
-          </div>
-        </article>
-        <article class="kpi transactions">
-          <div class="kpi-label">Transactions</div>
-          <div class="kpi-value mono" id="kpiTransactions">—</div>
-          <div class="kpi-rule"></div>
-          <div class="kpi-sub" id="kpiTransactionsSub">Average ticket: —</div>
-        </article>
-        <article class="kpi expenses">
-          <div class="kpi-label">Recorded disbursements</div>
-          <div class="kpi-value mono" id="kpiExpenses">—</div>
-          <div class="kpi-rule"></div>
-          <div class="kpi-sub">From the DISBURSEMENT tab</div>
-        </article>
-        <article class="kpi result" id="resultCard">
-          <div class="kpi-label">Sales less disbursements</div>
-          <div class="kpi-value mono" id="kpiResult">—</div>
-          <div class="kpi-rule"></div>
-          <div class="kpi-sub">
-            Operational indicator, not accounting net income
-          </div>
-        </article>
-      </section>
-
-      <section class="capacity-strip" aria-label="Capacity and data status">
-        <article class="capacity-card">
-          <div class="capacity-ring" id="tdcRing" aria-hidden="true"></div>
-          <div class="capacity-copy">
-            <div class="capacity-value-row">
-              <strong class="mono" id="tdcValue">—</strong>
-              <span
-                class="capacity-trend-badge insufficient"
-                id="tdcTrendBadge"
-              >
-                — No trend
-              </span>
+        <section class="kpi-grid" aria-label="Key performance indicators">
+          <article class="kpi sales">
+            <div class="kpi-label">Gross sales</div>
+            <div class="kpi-value mono" id="kpiSales">—</div>
+            <div class="kpi-rule"></div>
+            <div class="kpi-sub" id="kpiSalesSub">From encoded sales records</div>
+          </article>
+          <article class="kpi target">
+            <div class="kpi-label">Target achievement</div>
+            <div class="kpi-value mono" id="kpiTarget">—</div>
+            <div class="kpi-rule"></div>
+            <div class="kpi-sub" id="kpiTargetSub">
+              Monthly targets in source data
             </div>
-            <span
-              >Current TDC utilization — latest available snapshot per
-              branch</span
-            >
-            <small class="capacity-trend-detail mono" id="tdcTrendDetail">
-              No prior slot record found for comparison
-            </small>
-          </div>
-        </article>
-        <article class="capacity-card">
-          <div class="capacity-ring" id="pdcRing" aria-hidden="true"></div>
-          <div class="capacity-copy">
-            <div class="capacity-value-row">
-              <strong class="mono" id="pdcValue">—</strong>
-              <span
-                class="capacity-trend-badge insufficient"
-                id="pdcTrendBadge"
-              >
-                — No trend
-              </span>
+          </article>
+          <article class="kpi transactions">
+            <div class="kpi-label">Transactions</div>
+            <div class="kpi-value mono" id="kpiTransactions">—</div>
+            <div class="kpi-rule"></div>
+            <div class="kpi-sub" id="kpiTransactionsSub">Average ticket: —</div>
+          </article>
+          <article class="kpi expenses">
+            <div class="kpi-label">Recorded disbursements</div>
+            <div class="kpi-value mono" id="kpiExpenses">—</div>
+            <div class="kpi-rule"></div>
+            <div class="kpi-sub">From the DISBURSEMENT tab</div>
+          </article>
+          <article class="kpi result" id="resultCard">
+            <div class="kpi-label">Sales less disbursements</div>
+            <div class="kpi-value mono" id="kpiResult">—</div>
+            <div class="kpi-rule"></div>
+            <div class="kpi-sub">
+              Operational indicator, not accounting net income
             </div>
-            <span
-              >Current PDC utilization — latest available snapshot per
-              branch</span
-            >
-            <small class="capacity-trend-detail mono" id="pdcTrendDetail">
-              No prior slot record found for comparison
-            </small>
-          </div>
-        </article>
-        <article class="context-card">
-          <strong id="sourceName">Connected test spreadsheet</strong>
-          <span id="sourceMeta">Waiting for the data…</span>
-        </article>
-      </section>
+          </article>
+        </section>
 
-      <section class="chart-grid">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Sales momentum</h2>
-              <div class="panel-subtitle">
-                Encoded sales amount over the selected period
+        <section class="capacity-strip" aria-label="Capacity and data status">
+          <article class="capacity-card">
+            <div class="capacity-ring" id="tdcRing" aria-hidden="true"></div>
+            <div class="capacity-copy">
+              <div class="capacity-value-row">
+                <strong class="mono" id="tdcValue">—</strong>
+                <span
+                  class="capacity-trend-badge insufficient"
+                  id="tdcTrendBadge"
+                >
+                  — No trend
+                </span>
               </div>
+              <span
+                >Current TDC utilization — latest available snapshot per
+                branch</span
+              >
+              <small class="capacity-trend-detail mono" id="tdcTrendDetail">
+                No prior slot record found for comparison
+              </small>
             </div>
-            <span class="panel-tag" id="trendBucket">Trend</span>
-          </div>
-          <div class="chart-canvas" id="salesTrendChart"></div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Service mix</h2>
-              <div class="panel-subtitle">
-                Share of gross sales by service group
+          </article>
+          <article class="capacity-card">
+            <div class="capacity-ring" id="pdcRing" aria-hidden="true"></div>
+            <div class="capacity-copy">
+              <div class="capacity-value-row">
+                <strong class="mono" id="pdcValue">—</strong>
+                <span
+                  class="capacity-trend-badge insufficient"
+                  id="pdcTrendBadge"
+                >
+                  — No trend
+                </span>
               </div>
+              <span
+                >Current PDC utilization — latest available snapshot per
+                branch</span
+              >
+              <small class="capacity-trend-detail mono" id="pdcTrendDetail">
+                No prior slot record found for comparison
+              </small>
             </div>
-            <span class="panel-tag">Sales</span>
-          </div>
-          <div class="donut-layout">
-            <div class="donut" id="serviceDonut">
-              <div class="donut-hole">
-                <div>
-                  <strong id="serviceTotal">—</strong>
-                  <span>Total</span>
+          </article>
+          <article class="context-card">
+            <strong id="sourceName">Connected test spreadsheet</strong>
+            <span id="sourceMeta">Waiting for the data…</span>
+          </article>
+        </section>
+
+        <section class="chart-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Sales momentum</h2>
+                <div class="panel-subtitle">
+                  Encoded sales amount over the selected period
+                </div>
+              </div>
+              <span class="panel-tag" id="trendBucket">Trend</span>
+            </div>
+            <div class="chart-canvas" id="salesTrendChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Service mix</h2>
+                <div class="panel-subtitle">
+                  Share of gross sales by service group
+                </div>
+              </div>
+              <span class="panel-tag">Sales</span>
+            </div>
+            <div class="donut-layout">
+              <div class="donut" id="serviceDonut">
+                <div class="donut-hole">
+                  <div>
+                    <strong id="serviceTotal">—</strong>
+                    <span>Total</span>
+                  </div>
+                </div>
+              </div>
+              <div class="legend" id="serviceLegend"></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="chart-grid secondary deferred-render">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Top-performing branches</h2>
+                <div class="panel-subtitle">Gross sales with target context</div>
+              </div>
+              <span class="panel-tag">Top 10</span>
+            </div>
+            <div class="bar-list" id="topBranchesChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Customer mix</h2>
+                <div class="panel-subtitle">
+                  Customer counts from CUSTOMER TYPE V2
+                </div>
+              </div>
+              <span class="panel-tag">Customers</span>
+            </div>
+            <div class="bar-list" id="customerMixChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Expense mix</h2>
+                <div class="panel-subtitle">
+                  Recorded disbursement amount by type
+                </div>
+              </div>
+              <span class="panel-tag">Spend</span>
+            </div>
+            <div class="bar-list" id="expenseMixChart"></div>
+          </article>
+        </section>
+
+        <section class="panel table-panel deferred-render">
+          <div class="table-toolbar">
+            <div>
+              <h2 class="panel-title">Branch performance detail</h2>
+              <div class="panel-subtitle">
+                Select a branch to view its latest TDC and PDC slot utilization
+              </div>
+              <div
+                class="percentage-guides"
+                aria-label="Percentage color guide"
+              >
+                <div class="percentage-guide-group">
+                  <span class="percentage-guide-title">Achievement:</span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot good"></span>
+                    ≥100% Target met
+                  </span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot warn"></span>
+                    80–99.9% Near target
+                  </span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot bad"></span>
+                    Below 80%
+                  </span>
+                </div>
+                <div class="percentage-guide-group">
+                  <span class="percentage-guide-title">TDC/PDC:</span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot good"></span>
+                    ≥70% High
+                  </span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot warn"></span>
+                    35–69.9% Moderate
+                  </span>
+                  <span class="percentage-guide-item">
+                    <span class="percentage-guide-dot bad"></span>
+                    Below 35% Low
+                  </span>
                 </div>
               </div>
             </div>
-            <div class="legend" id="serviceLegend"></div>
-          </div>
-        </article>
-      </section>
-
-      <section class="chart-grid secondary deferred-render">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Top-performing branches</h2>
-              <div class="panel-subtitle">Gross sales with target context</div>
-            </div>
-            <span class="panel-tag">Top 10</span>
-          </div>
-          <div class="bar-list" id="topBranchesChart"></div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Customer mix</h2>
-              <div class="panel-subtitle">
-                Customer counts from CUSTOMER TYPE V2
-              </div>
-            </div>
-            <span class="panel-tag">Customers</span>
-          </div>
-          <div class="bar-list" id="customerMixChart"></div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Expense mix</h2>
-              <div class="panel-subtitle">
-                Recorded disbursement amount by type
-              </div>
-            </div>
-            <span class="panel-tag">Spend</span>
-          </div>
-          <div class="bar-list" id="expenseMixChart"></div>
-        </article>
-      </section>
-
-      <section class="panel table-panel deferred-render">
-        <div class="table-toolbar">
-          <div>
-            <h2 class="panel-title">Branch performance detail</h2>
-            <div class="panel-subtitle">
-              Select a branch to view its latest TDC and PDC slot utilization
-            </div>
-            <div
-              class="percentage-guides"
-              aria-label="Percentage color guide"
+            <input
+              class="table-search"
+              id="branchSearch"
+              type="search"
+              placeholder="Search branch or region"
+              aria-label="Search branch table"
             >
-              <div class="percentage-guide-group">
-                <span class="percentage-guide-title">Achievement:</span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot good"></span>
-                  ≥100% Target met
-                </span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot warn"></span>
-                  80–99.9% Near target
-                </span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot bad"></span>
-                  Below 80%
-                </span>
-              </div>
-              <div class="percentage-guide-group">
-                <span class="percentage-guide-title">TDC/PDC:</span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot good"></span>
-                  ≥70% High
-                </span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot warn"></span>
-                  35–69.9% Moderate
-                </span>
-                <span class="percentage-guide-item">
-                  <span class="percentage-guide-dot bad"></span>
-                  Below 35% Low
-                </span>
-              </div>
-            </div>
           </div>
-          <input
-            class="table-search"
-            id="branchSearch"
-            type="search"
-            placeholder="Search branch or region"
-            aria-label="Search branch table"
-          >
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Branch</th>
-                <th class="number">Sales</th>
-                <th class="number">Target</th>
-                <th class="number">Achievement</th>
-                <th class="number">Transactions</th>
-                <th class="number">Avg. ticket</th>
-                <th class="number">Disbursements</th>
-                <th class="number">Sales less disb.</th>
-                <th class="number">TDC uti.</th>
-                <th class="number">PDC uti.</th>
-              </tr>
-            </thead>
-            <tbody id="branchTableBody"></tbody>
-          </table>
-        </div>
-        <div class="table-foot">
-          <span id="tableCount">0 branches</span>
-          <span
-            >Capacity uses each course’s latest usable slot record inside the
-            selected dates.</span
-          >
-        </div>
-      </section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Branch</th>
+                  <th class="number">Sales</th>
+                  <th class="number">Target</th>
+                  <th class="number">Achievement</th>
+                  <th class="number">Transactions</th>
+                  <th class="number">Avg. ticket</th>
+                  <th class="number">Disbursements</th>
+                  <th class="number">Sales less disb.</th>
+                  <th class="number">TDC uti.</th>
+                  <th class="number">PDC uti.</th>
+                </tr>
+              </thead>
+              <tbody id="branchTableBody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span id="tableCount">0 branches</span>
+            <span
+              >Capacity uses each course’s latest usable slot record inside the
+              selected dates.</span
+            >
+          </div>
+        </section>
 
-      <div class="footer-note">
-        Filter changes reuse a short-lived read-only cache. The Refresh button
-        forces a new Sheet read. “Sales less disbursements” is a management
-        indicator and should not be presented as audited profit or net income.
-      </div>
+        <div class="footer-note">
+          Filter changes reuse a short-lived read-only cache. The Refresh button
+          forces a new Sheet read. “Sales less disbursements” is a management
+          indicator and should not be presented as audited profit or net income.
+        </div>
       </main>
 
+      <!-- 2. SLOT UTILIZATION VIEW -->
       <main
         class="hidden"
         id="slotUtilizationView"
@@ -639,7 +652,42 @@
           average” combines all usable weekly slot records inside those dates.
         </div>
       </main>
-    </div>
+
+      <!-- 3. REGIONAL SCORECARD VIEW -->
+      <main
+        class="hidden"
+        id="regionalScorecardView"
+        role="tabpanel"
+        aria-labelledby="regionalTab"
+      >
+        <section class="panel table-panel">
+          <div class="table-toolbar">
+            <div>
+              <h2 class="panel-title">Regional Sales Achievement (%ach Region)</h2>
+              <div class="panel-subtitle">
+                Aggregated monthly collection targets vs. actual gross collections by cluster
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Region / Cluster</th>
+                  <th class="number">Branches</th>
+                  <th class="number">Sales Target</th>
+                  <th class="number">Actual Sales</th>
+                  <th class="number">Achievement (%ach)</th>
+                  <th class="number">Variance (₱)</th>
+                </tr>
+              </thead>
+              <tbody id="regionalTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+    </div> <!-- Closes <div class="app-shell" id="dashboard"> -->
 
     <dialog
       class="slot-dialog"

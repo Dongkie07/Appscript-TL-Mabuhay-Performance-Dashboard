@@ -157,31 +157,31 @@
     }
 
     function showDashboardView(viewId) {
-      dashboardState.activeView = viewId;
+  dashboardState.currentView = viewId;
+  const isSlotView = viewId === "slotUtilizationView";
+  const isRegionalView = viewId === "regionalScorecardView";
 
-      document.querySelectorAll("[data-dashboard-view]").forEach(
-        (viewButton) => {
-          const isActive = viewButton.dataset.dashboardView === viewId;
+  // Unhide the selected view and hide the others
+  ["overviewView", "slotUtilizationView", "regionalScorecardView"].forEach((id) => {
+    const element = getElementById(id);
+    if (!element) return;
+    element.classList.toggle("hidden", id !== viewId);
+  });
 
-          viewButton.classList.toggle("active", isActive);
-          viewButton.setAttribute(
-            "aria-selected",
-            isActive ? "true" : "false",
-          );
-        },
-      );
+  // Highlight the active tab button
+  document.querySelectorAll(".dashboard-view-tab").forEach((tab) => {
+    const active = tab.getAttribute("data-dashboard-view") === viewId;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
 
-      ["overviewView", "slotUtilizationView"].forEach((panelId) => {
-        getElementById(panelId).classList.toggle(
-          "hidden",
-          panelId !== viewId,
-        );
-      });
-
-      if (viewId === "slotUtilizationView") {
-        ensureSlotUtilizationData();
-      }
-    }
+  // Load or render data for the selected view
+  if (isSlotView) {
+    ensureSlotUtilizationData();
+  } else if (isRegionalView) {
+    renderRegionalScorecard();
+  }
+}
 
     function handleSlotCourseClick(event) {
       dashboardState.slotCourse =
@@ -1808,9 +1808,21 @@
       return "Near capacity — review additional slots";
     }
 
-    function renderSalesTrendChart(points) {
+    function renderSalesTrendChart(rawPoints) {
       const host = getElementById("salesTrendChart");
-      if (!points || !points.length) {
+      if (!host) return;
+
+      // 1. Clean and validate incoming points so NaN values never break the SVG path
+      const points = (rawPoints || []).filter(
+        (point) => point && typeof point.sales !== "undefined"
+      ).map((point) => ({
+        key: point.key || "",
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+        transactions: Number(point.transactions) || 0
+      }));
+
+      if (!points.length) {
         host.innerHTML =
           '<div class="empty-chart">No sales trend data for this selection.</div>';
         return;
@@ -1825,6 +1837,7 @@
       const yMax = calculateNiceMaximum(maxValue);
       const xStep =
         points.length > 1 ? chartWidth / (points.length - 1) : chartWidth;
+        
       const coords = points.map((point, index) => ({
         x: pad.left + (points.length === 1 ? chartWidth / 2 : index * xStep),
         y: pad.top + chartHeight - (point.sales / yMax) * chartHeight,
@@ -1837,6 +1850,7 @@
             `${index ? "L" : "M"} ${item.x.toFixed(1)} ${item.y.toFixed(1)}`,
         )
         .join(" ");
+        
       const areaPath =
         `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ` +
         `${(pad.top + chartHeight).toFixed(1)} L ${coords[0].x.toFixed(1)} ` +
@@ -3471,6 +3485,77 @@
         branches: courseBranches,
       };
     }
+    function renderRegionalScorecard() {
+          if (!dashboardState.data || !dashboardState.data.branches) {
+            return;
+          }
+
+          const branchList = dashboardState.data.branches;
+          const regionsMap = Object.create(null);
+
+          // 1. Group branches by region and sum sales & targets
+          branchList.forEach((branch) => {
+            const regionName = branch.region || "Unspecified";
+            if (!regionsMap[regionName]) {
+              regionsMap[regionName] = {
+                region: regionName,
+                branchesCount: 0,
+                sales: 0,
+                target: 0
+              };
+            }
+            regionsMap[regionName].branchesCount += 1;
+            regionsMap[regionName].sales += Number(branch.sales) || 0;
+            regionsMap[regionName].target += Number(branch.target) || 0;
+          });
+
+          // 2. Convert to array and calculate %ach
+          const regionalSummaries = Object.values(regionsMap).map((item) => {
+            const achievement = item.target > 0 ? (item.sales / item.target) * 100 : null;
+            const variance = item.sales - item.target;
+            return {
+              ...item,
+              achievement,
+              variance
+            };
+          });
+
+          // 3. Sort highest achievement first
+          regionalSummaries.sort((a, b) => (b.achievement || 0) - (a.achievement || 0));
+
+          // 4. Render rows into the table
+          const tbody = getElementById("regionalTableBody");
+          if (!tbody) return;
+
+          tbody.replaceChildren();
+
+          regionalSummaries.forEach((reg) => {
+            const tr = document.createElement("tr");
+
+            // Region Name
+            const nameCell = document.createElement("td");
+            nameCell.innerHTML = `<strong>${escapeHtml(reg.region)}</strong>`;
+            tr.appendChild(nameCell);
+
+            // Branch Count
+            tr.appendChild(createNumberCell(formatCount(reg.branchesCount)));
+
+            // Target
+            tr.appendChild(createNumberCell(reg.target > 0 ? formatCurrency(reg.target) : "—"));
+
+            // Actual Sales
+            tr.appendChild(createNumberCell(formatCurrency(reg.sales)));
+
+            // Achievement % Badge (reuses your existing createMetricBadgeCell!)
+            tr.appendChild(createMetricBadgeCell(reg.achievement, "achievement"));
+
+            // Variance
+            const varCell = createNumberCell(formatSignedCurrency(reg.variance));
+            varCell.classList.add(reg.variance >= 0 ? "positive" : "negative-text");
+            tr.appendChild(varCell);
+
+            tbody.appendChild(tr);
+          });}
 
     function createPreviewUtilizationTrend(
       currentUtilization,
@@ -3500,4 +3585,6 @@
       };
     }
   })();
+  
+
 </script>

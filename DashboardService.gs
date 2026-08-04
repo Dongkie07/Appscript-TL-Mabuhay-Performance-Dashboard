@@ -53,12 +53,27 @@ function buildDashboardData_(requestedFilters) {
     trendBucketMode
   );
 
+  // 1. Pre-populate all official branches so 0-sales branches exist in branchTotals
+  initializeCanonicalBranches_(
+    aggregation.branchTotals,
+    sources.sales.canonicalBranches
+  );
+
+  // 2. Scan and capture only monthly targets that belong to the selected filter period
+  aggregateMonthlyTargets_(
+    sources.sales,
+    filters,
+    aggregation
+  );
+
+  // 3. Aggregate daily sales rows onto the initialized branches
   aggregateSalesRows_(
     sources.sales,
     filters,
     timezone,
     aggregation
   );
+
   applyMonthlyTargets_(aggregation);
   applyOverviewCapacity_(aggregation);
 
@@ -113,6 +128,155 @@ function buildDashboardData_(requestedFilters) {
   return response;
 }
 
+/**
+ * Pre-populates all official branches into branchTotals so location targets
+ * are included even if they have 0 sales transactions in the selected period.
+ */
+function initializeCanonicalBranches_(branchTotals, canonicalBranches) {
+  const branchKeys = Object.keys(canonicalBranches || {});
+
+  for (let index = 0; index < branchKeys.length; index += 1) {
+    const branchKey = branchKeys[index];
+    const branch = canonicalBranches[branchKey] || {};
+
+    const branchTotal = getBranchAggregate_(
+      branchTotals,
+      branchKey,
+      branch.branchName || branchKey,
+      branch.region || 'Unspecified'
+    );
+
+    if (branch.monthlyTarget || branch.target) {
+      branchTotal.target = Number(branch.monthlyTarget || branch.target) || 0;
+    }
+  }
+}
+
+/**
+ * Scans salesSource for monthly targets matching the selected filter period,
+ * ensuring targets from other months (like July) are not added to June.
+ */
+function aggregateMonthlyTargets_(salesSource, filters, aggregation) {
+  const selectedRegion = filters && filters.region ? filters.region : 'ALL';
+  const selectedBranch = filters && filters.branch ? filters.branch : 'ALL';
+
+  for (let rowIndex = 0; rowIndex < salesSource.rows.length; rowIndex += 1) {
+    const row = salesSource.rows[rowIndex];
+    if (!row.branchKey || (row.target || 0) <= 0 || !row.year || !row.month) {
+      continue;
+    }
+
+    /**
+ * Safely checks if a target's year and month fall within the selected date filter range.
+ * Uses integer YYYYMM comparison (e.g., 202607) to prevent zero-padding string bugs.
+ */
+function isMonthInFilter_(year, month, filters) {
+  if (!filters || !filters.startDate || !filters.endDate) {
+    return true;
+  }
+
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  if (!numericYear || !numericMonth) {
+    return false;
+  }
+
+  // Convert target month to a numerical value like 202607 for foolproof integer comparison
+  const targetPeriodValue = numericYear * 100 + numericMonth;
+
+  // Extract year and month safely from startDate and endDate
+  const startPeriodValue = getYearMonthValue_(filters.startDate);
+  const endPeriodValue = getYearMonthValue_(filters.endDate);
+
+  if (!startPeriodValue || !endPeriodValue) {
+    return true;
+  }
+
+  return targetPeriodValue >= startPeriodValue && targetPeriodValue <= endPeriodValue;
+}
+
+/**
+ * Converts any date input ("YYYY-MM-DD" string or Date object) into a numeric YYYYMM integer (e.g., 202607).
+ */
+function getYearMonthValue_(dateInput) {
+  if (!dateInput) return null;
+
+  // If it is a JavaScript Date object
+  if (dateInput instanceof Date || typeof dateInput.getMonth === 'function') {
+    return dateInput.getFullYear() * 100 + (dateInput.getMonth() + 1);
+  }
+
+  // If it is a string like "2026-07-01" or "2026/07/01"
+  const str = String(dateInput).trim();
+  const parts = str.split(/[-/]/);
+  if (parts.length >= 2) {
+    const y = Number(parts[0]);
+    const m = Number(parts[1]);
+    if (y && m) {
+      return y * 100 + m;
+    }
+  }
+
+  // Fallback: try parsing string as Date
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.getFullYear() * 100 + (parsed.getMonth() + 1);
+  }
+
+  return null;
+}
+
+    const branchIdentity = resolveBranchIdentity_(
+      row,
+      salesSource.canonicalBranches
+    );
+
+    if (selectedRegion !== 'ALL' && branchIdentity.region !== selectedRegion) {
+      continue;
+    }
+    if (selectedBranch !== 'ALL' && row.branchKey !== selectedBranch) {
+      continue;
+    }
+
+    recordMonthlyTarget_(
+      aggregation.monthlyTargets,
+      row,
+      branchIdentity
+    );
+  }
+}
+
+/**
+ * Checks if a target's year and month fall within the selected date filter range.
+ */
+/**
+ * Safely checks if a target's year and month match the END DATE's month.
+ * This prevents multi-month date ranges (e.g., June 1 - July 29) from doubling
+ * or adding multiple monthly quotas together.
+ */
+function isMonthInFilter_(year, month, filters) {
+  if (!filters || !filters.endDate) {
+    return true;
+  }
+
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  if (!numericYear || !numericMonth) {
+    return false;
+  }
+
+  // Convert target row's month to an integer like 202607
+  const targetPeriodValue = numericYear * 100 + numericMonth;
+
+  // Extract the YYYYMM integer ONLY from the selected End Date
+  const endPeriodValue = getYearMonthValue_(filters.endDate);
+  if (!endPeriodValue) {
+    return true;
+  }
+
+  // ONLY include the target if it matches the month of the selected End Date
+  return targetPeriodValue === endPeriodValue;
+}
 
 function buildSlotUtilizationData_(requestedFilters) {
   const processingStartedAt = Date.now();
@@ -139,7 +303,6 @@ function buildSlotUtilizationData_(requestedFilters) {
     filters,
     'SLOT_UTILIZATION_ANALYTICS_V3_DATA_QUALITY'
   );
-
   if (cachedResponse) {
     return prepareCachedDashboardResponse_(
       cachedResponse,
@@ -152,14 +315,12 @@ function buildSlotUtilizationData_(requestedFilters) {
   const capacitySnapshots = Object.create(null);
   const weeklyBusiness = Object.create(null);
   let rowsMatched = 0;
-
   for (
     let rowIndex = 0;
     rowIndex < salesSource.rows.length;
     rowIndex += 1
   ) {
     const salesRow = salesSource.rows[rowIndex];
-
     if (!salesRow.date || !salesRow.branchKey) {
       continue;
     }
@@ -168,7 +329,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       salesRow,
       salesSource.canonicalBranches
     );
-
     if (
       !matchesFilters_(
         salesRow.date,
@@ -184,7 +344,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       weeklyBusiness,
       salesRow
     );
-
     if (hasCapacityData_(salesRow)) {
       rowsMatched += 1;
     }
@@ -222,7 +381,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       capacityRowsMatched: rowsMatched
     }
   };
-
   try {
     writeDashboardResultCache_(
       spreadsheet,
@@ -240,7 +398,6 @@ function buildSlotUtilizationData_(requestedFilters) {
 
   return response;
 }
-
 
 function recordWeeklyBranchBusiness_(
   weeklyBusiness,
@@ -274,7 +431,6 @@ function recordWeeklyBranchBusiness_(
   weeklyRecord.sales += Number(salesRow.amount) || 0;
   weeklyRecord.transactions +=
     Number(salesRow.transactions) || 0;
-
   if (
     salesRow.serviceGroup &&
     salesRow.serviceGroup !== 'Unspecified'
@@ -299,7 +455,6 @@ function updateDetailedCapacitySnapshot_(
     salesRow.year * 100 + salesRow.week;
   let branchHistory =
     capacitySnapshots[salesRow.branchKey];
-
   if (!branchHistory) {
     branchHistory = {
       snapshots: Object.create(null)
@@ -392,7 +547,6 @@ function aggregateSalesRows_(
     rowIndex += 1
   ) {
     const salesRow = salesSource.rows[rowIndex];
-
     if (!salesRow.date || !salesRow.branchKey) {
       continue;
     }
@@ -401,7 +555,6 @@ function aggregateSalesRows_(
       salesRow,
       salesSource.canonicalBranches
     );
-
     if (
       !matchesFilters_(
         salesRow.date,
@@ -418,7 +571,6 @@ function aggregateSalesRows_(
       aggregation.selectedMaxDate,
       salesRow.date
     );
-
     addSalesToBranch_(
       aggregation.branchTotals,
       salesRow,
@@ -434,11 +586,6 @@ function aggregateSalesRows_(
       salesRow,
       aggregation.trendBucketMode,
       timezone
-    );
-    recordMonthlyTarget_(
-      aggregation.monthlyTargets,
-      salesRow,
-      branchIdentity
     );
     updateOverviewCapacity_(
       aggregation.capacityOverview,
@@ -476,7 +623,6 @@ function addSalesToBranch_(
     branchIdentity.branchName,
     branchIdentity.region
   );
-
   branchTotal.sales += salesRow.amount;
   branchTotal.transactions += salesRow.transactions;
 }
@@ -492,7 +638,6 @@ function addSalesToTrend_(
     trendBucketMode,
     timezone
   );
-
   if (!salesTrend[trendBucket.key]) {
     salesTrend[trendBucket.key] = {
       key: trendBucket.key,
@@ -523,7 +668,6 @@ function recordMonthlyTarget_(
     '-' +
     pad2_(salesRow.month);
   const savedTarget = monthlyTargets[targetKey];
-
   if (savedTarget && savedTarget.target >= salesRow.target) {
     return;
   }
@@ -553,11 +697,9 @@ function applyMonthlyTargets_(aggregation) {
       target.branchName,
       target.region
     );
-
     branchTotal.target += target.target;
   }
 }
-
 
 function updateOverviewCapacity_(
   capacityOverview,
@@ -585,7 +727,6 @@ function updateOverviewCapacity_(
 function updateOverviewCourse_(courseHistory, salesRow, prefix) {
   const allocated = salesRow[prefix + 'Allocated'];
   const used = salesRow[prefix + 'Used'];
-
   if (allocated === null && used === null) {
     return;
   }
@@ -596,7 +737,6 @@ function updateOverviewCourse_(courseHistory, salesRow, prefix) {
     allocated: allocated,
     used: used
   };
-
   if (!courseHistory.latest) {
     courseHistory.latest = incoming;
     return;
@@ -645,7 +785,6 @@ function applyOverviewCapacity_(aggregation) {
       capacity.branchName,
       capacity.region
     );
-
     applyOverviewCourseToBranch_(branchTotal, capacity.tdc, 'tdc');
     applyOverviewCourseToBranch_(branchTotal, capacity.pdc, 'pdc');
 
@@ -699,7 +838,6 @@ function applyCapacitySnapshots_(aggregation) {
   const branchKeys = Object.keys(
     aggregation.capacitySnapshots
   );
-
   for (
     let branchIndex = 0;
     branchIndex < branchKeys.length;
@@ -709,7 +847,6 @@ function applyCapacitySnapshots_(aggregation) {
     const history = aggregation.capacitySnapshots[branchKey];
     const orderedSnapshots =
       getOrderedCapacitySnapshots_(history);
-
     if (!orderedSnapshots.length) {
       continue;
     }
@@ -721,13 +858,11 @@ function applyCapacitySnapshots_(aggregation) {
       snapshot.branchName,
       snapshot.region
     );
-
     branchTotal.capacityPeriod = snapshot.periodLabel;
     branchTotal.previousCapacityPeriod =
       orderedSnapshots.length > 1
         ? orderedSnapshots[1].periodLabel
         : '';
-
     applyCourseCapacityHistory_(
       branchTotal,
       orderedSnapshots,
@@ -747,10 +882,8 @@ function getOrderedCapacitySnapshots_(history) {
   }
 
   const snapshots = [];
-
   if (history.snapshots) {
     const snapshotKeys = Object.keys(history.snapshots);
-
     for (
       let snapshotIndex = 0;
       snapshotIndex < snapshotKeys.length;
@@ -776,7 +909,6 @@ function getOrderedCapacitySnapshots_(history) {
   ) {
     return secondSnapshot.periodKey - firstSnapshot.periodKey;
   });
-
   return snapshots;
 }
 
@@ -788,14 +920,12 @@ function getCourseCapacitySnapshots_(
   const allocatedProperty =
     coursePrefix + 'Allocated';
   const usedProperty = coursePrefix + 'Used';
-
   for (
     let snapshotIndex = 0;
     snapshotIndex < orderedSnapshots.length;
     snapshotIndex += 1
   ) {
     const snapshot = orderedSnapshots[snapshotIndex];
-
     if (
       snapshot[allocatedProperty] !== null ||
       snapshot[usedProperty] !== null
@@ -816,7 +946,6 @@ function applyCourseCapacityHistory_(
     orderedSnapshots,
     coursePrefix
   );
-
   if (!courseSnapshots.length) {
     return;
   }
@@ -869,7 +998,6 @@ function aggregateExpenseRows_(
     rowIndex += 1
   ) {
     const expenseRow = expenseSource.rows[rowIndex];
-
     if (!expenseRow.date || !expenseRow.branchKey) {
       continue;
     }
@@ -878,7 +1006,6 @@ function aggregateExpenseRows_(
       expenseRow,
       canonicalBranches
     );
-
     if (
       !matchesFilters_(
         expenseRow.date,
@@ -898,7 +1025,6 @@ function aggregateExpenseRows_(
       branchIdentity.branchName,
       branchIdentity.region
     );
-
     branchTotal.expenses += expenseRow.amount;
 
     addToMap_(
@@ -921,7 +1047,6 @@ function aggregateCustomerRows_(
     rowIndex += 1
   ) {
     const customerRow = customerSource.rows[rowIndex];
-
     if (!customerRow.date || !customerRow.branchKey) {
       continue;
     }
@@ -930,7 +1055,6 @@ function aggregateCustomerRows_(
       customerRow,
       canonicalBranches
     );
-
     if (
       !matchesFilters_(
         customerRow.date,
@@ -950,7 +1074,6 @@ function aggregateCustomerRows_(
       branchIdentity.branchName,
       branchIdentity.region
     );
-
     branchTotal.customers += customerRow.customerCount;
 
     addToMap_(
@@ -964,7 +1087,6 @@ function aggregateCustomerRows_(
 function buildBranchSummaries_(branchTotals) {
   const branchKeys = Object.keys(branchTotals);
   const branchSummaries = [];
-
   for (
     let branchIndex = 0;
     branchIndex < branchKeys.length;
@@ -979,7 +1101,6 @@ function buildBranchSummaries_(branchTotals) {
   }
 
   branchSummaries.sort(compareBranchSales_);
-
   return branchSummaries;
 }
 
@@ -1009,7 +1130,6 @@ function createBranchSummary_(branchKey, branchTotal) {
     branchTotal.pdcPreviousUsed,
     branchTotal.pdcPreviousAllocated
   );
-
   return {
     branchKey: branchKey,
     branchName: branchTotal.branchName,
@@ -1090,7 +1210,6 @@ function createUtilizationTrend_(
   const changePercentagePoints =
     currentUtilization - previousUtilization;
   let status = 'STABLE';
-
   if (changePercentagePoints > 5) {
     status = 'GROWING';
   } else if (changePercentagePoints < -5) {
@@ -1120,7 +1239,6 @@ function compareBranchSales_(firstBranch, secondBranch) {
 
 function calculateDashboardTotals_(branchSummaries) {
   const totals = createEmptyDashboardTotals_();
-
   for (
     let branchIndex = 0;
     branchIndex < branchSummaries.length;
@@ -1163,7 +1281,6 @@ function addBranchToDashboardTotals_(totals, branchSummary) {
   totals.transactions += branchSummary.transactions;
   totals.customers += branchSummary.customers;
   totals.expenses += branchSummary.expenses;
-
   if (branchSummary.tdcAllocated !== null) {
     totals.tdcAllocated += branchSummary.tdcAllocated;
     totals.tdcUsed += branchSummary.tdcUsed || 0;
@@ -1208,7 +1325,6 @@ function buildDashboardResponse_(context) {
   const expenseSource = context.sources.expenses;
   const customerSource = context.sources.customers;
   const aggregation = context.aggregation;
-
   return {
     meta: buildDashboardMeta_(context),
     availableDateRange: {
@@ -1299,7 +1415,6 @@ function buildFilterOptions_(salesSource) {
   const branchOptions = [];
 
   regionOptions.sort(regionSort_);
-
   for (
     let branchIndex = 0;
     branchIndex < branchKeys.length;
@@ -1363,7 +1478,6 @@ function buildDashboardKpis_(totals) {
     totals.pdcTrendPreviousUsed,
     totals.pdcTrendPreviousAllocated
   );
-
   return {
     sales: round2_(totals.sales),
     target: round2_(totals.target),
@@ -1495,7 +1609,6 @@ function buildCapacityCourseView_(
     periodKey: freshnessSummary.latestPeriodKey,
     periodLabel: freshnessSummary.latestPeriodLabel
   };
-
   return {
     courseCode: courseCode,
     summary: summary,
@@ -1514,7 +1627,6 @@ function getSelectedOfficialBranchKeys_(
   const selectedBranch = filters && filters.branch
     ? filters.branch
     : 'ALL';
-
   return branchKeys.filter(function filterOfficialBranch(branchKey) {
     const branch = canonicalBranches[branchKey] || {};
     const matchesRegion =
@@ -1549,7 +1661,6 @@ function createEmptyCapacityBranchView_(
     aboveAllocation: null,
     utilization: null
   };
-
   return {
     branchKey: branchKey,
     branchName: officialBranch.branchName || branchKey,
@@ -1583,7 +1694,6 @@ function buildCapacityDataQuality_(latest) {
       used !== null
     )
   );
-
   if (!hasRecord) {
     return {
       code: 'NO_RECORD',
@@ -1642,7 +1752,6 @@ function buildCapacityDataQuality_(latest) {
 function applyCapacityFreshness_(branches) {
   let latestPeriodKey = null;
   let latestPeriodLabel = '';
-
   for (
     let branchIndex = 0;
     branchIndex < branches.length;
@@ -1670,26 +1779,22 @@ function applyCapacityFreshness_(branches) {
     staleBranches: 0,
     branchesWithoutRecord: 0
   };
-
   for (
     let branchIndex = 0;
     branchIndex < branches.length;
     branchIndex += 1
   ) {
     const branch = branches[branchIndex];
-
     branch.freshness = createCapacityFreshness_(
       branch.latest ? branch.latest.periodKey : null,
       latestPeriodKey
     );
-
     if (branch.freshness.status === 'NO_RECORD') {
       summary.branchesWithoutRecord += 1;
     } else if (branch.freshness.status === 'CURRENT') {
       summary.currentBranches += 1;
     } else {
       summary.branchesBehindLatest += 1;
-
       if (branch.freshness.status === 'STALE') {
         summary.staleBranches += 1;
       }
@@ -1725,7 +1830,6 @@ function createCapacityFreshness_(
     (latestYear - currentYear) * 53 +
       (latestWeek - currentWeek)
   );
-
   if (lagWeeks === 0) {
     return {
       status: 'CURRENT',
@@ -1804,7 +1908,6 @@ function buildCapacityBranchView_(
     coursePrefix,
     weeklyBusiness
   );
-
   return {
     branchKey: branchKey,
     branchName: latestSnapshot.branchName,
@@ -1841,7 +1944,6 @@ function buildCapacityBranchView_(
   };
 }
 
-
 function buildCapacityWeeklyHistory_(
   branchKey,
   courseSnapshots,
@@ -1864,7 +1966,6 @@ function buildCapacityWeeklyHistory_(
     weeklyBusiness[branchKey] ||
     Object.create(null);
   const history = [];
-
   for (
     let snapshotIndex = 0;
     snapshotIndex < orderedOldestFirst.length;
@@ -1878,7 +1979,6 @@ function buildCapacityWeeklyHistory_(
     );
     const business =
       branchBusiness[snapshot.periodKey] || null;
-
     history.push({
       periodKey: snapshotView.periodKey,
       periodLabel: snapshotView.periodLabel,
@@ -1903,7 +2003,6 @@ function buildCapacityWeeklyHistory_(
 
 function collectCapacityServiceGroups_(weeklyHistory) {
   const serviceGroups = Object.create(null);
-
   for (
     let historyIndex = 0;
     historyIndex < weeklyHistory.length;
@@ -1938,7 +2037,6 @@ function buildCapacitySnapshotView_(
   const utilization = hasUsablePair
     ? percentageOrNull_(used, allocated)
     : null;
-
   return {
     periodKey: snapshot.periodKey,
     periodLabel: snapshot.periodLabel,
@@ -1968,7 +2066,6 @@ function calculateCoursePeriodTotals_(
   const allocatedProperty =
     coursePrefix + 'Allocated';
   const usedProperty = coursePrefix + 'Used';
-
   for (
     let snapshotIndex = 0;
     snapshotIndex < courseSnapshots.length;
@@ -2008,7 +2105,6 @@ function addCapacityBranchToSummary_(
     periodAverage.allocated;
   summaryTotals.periodUsed += periodAverage.used;
   summaryTotals.periodReports += periodAverage.reports;
-
   if (latest.utilization !== null) {
     summaryTotals.branchesWithUtilization += 1;
     summaryTotals.latestAllocated += latest.allocated;
@@ -2031,7 +2127,6 @@ function addCapacityBranchToSummary_(
     previous.allocated;
   summaryTotals.previousComparableUsed +=
     previous.used || 0;
-
   if (trend.status === 'GROWING') {
     summaryTotals.growingBranches += 1;
   } else if (trend.status === 'DECLINING') {
@@ -2060,7 +2155,6 @@ function finalizeCapacitySummary_(summaryTotals) {
       summaryTotals.previousComparableUsed,
       summaryTotals.previousComparableAllocated
     );
-
   return {
     latest: {
       allocated: round2_(
@@ -2163,7 +2257,6 @@ function buildSalesTrendSeries_(salesTrend) {
     trendIndex += 1
   ) {
     const trend = salesTrend[trendKeys[trendIndex]];
-
     series.push({
       key: trend.key,
       label: trend.label,
@@ -2178,14 +2271,12 @@ function buildSalesTrendSeries_(salesTrend) {
 function buildTopBranchSeries_(branchSummaries, limit) {
   const topBranches = branchSummaries.slice(0, limit);
   const series = [];
-
   for (
     let branchIndex = 0;
     branchIndex < topBranches.length;
     branchIndex += 1
   ) {
     const branch = topBranches[branchIndex];
-
     series.push({
       label: branch.branchName,
       value: branch.sales,
