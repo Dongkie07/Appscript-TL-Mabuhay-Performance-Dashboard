@@ -1,0 +1,3503 @@
+<script>
+  (() => {
+    "use strict";
+
+    const CHART_COLORS = [
+      "#0b1f3a",
+      "#c79224",
+      "#2c5d8a",
+      "#e4b84e",
+      "#6f7d90",
+      "#9b7530",
+      "#c8ad68",
+    ];
+
+    const dashboardState = {
+      data: null,
+      loading: false,
+      localPreview: false,
+      lastFocusedBranchButton: null,
+      activeView: "overviewView",
+      slotCourse: "tdc",
+      slotData: null,
+      slotLoading: false,
+      slotRequestKey: "",
+      slotPrefetchTimer: null,
+      pendingBranchKey: "ALL",
+      renderVersion: 0,
+    };
+
+    function getElementById(elementId) {
+      return document.getElementById(elementId);
+    }
+
+    document.addEventListener("DOMContentLoaded", initializeDashboard);
+
+    function initializeDashboard() {
+      registerEventListeners();
+      requestDashboardData({});
+    }
+
+    function registerEventListeners() {
+      getElementById("applyButton").addEventListener(
+        "click",
+        handleApplyFiltersClick,
+      );
+      getElementById("refreshButton").addEventListener(
+        "click",
+        handleRefreshClick,
+      );
+      getElementById("regionFilter").addEventListener(
+        "change",
+        handleRegionFilterChange,
+      );
+      getElementById("branchFilter").addEventListener(
+        "input",
+        rememberBranchSelection,
+      );
+      getElementById("branchFilter").addEventListener(
+        "change",
+        rememberBranchSelection,
+      );
+      getElementById("branchSearch").addEventListener(
+        "input",
+        renderBranchPerformanceTable,
+      );
+      getElementById("branchTableBody").addEventListener(
+        "click",
+        handleBranchTableClick,
+      );
+      getElementById("closeSlotDialogButton").addEventListener(
+        "click",
+        closeBranchUtilizationDialog,
+      );
+      getElementById("branchUtilizationDialog").addEventListener(
+        "click",
+        handleSlotDialogBackdropClick,
+      );
+      getElementById("branchUtilizationDialog").addEventListener(
+        "close",
+        restoreBranchButtonFocus,
+      );
+      getElementById("slotSort").addEventListener(
+        "change",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotLevelFilter").addEventListener(
+        "change",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotBranchSearch").addEventListener(
+        "input",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotUtilizationRows").addEventListener(
+        "click",
+        handleSlotLedgerClick,
+      );
+
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", handleDatePresetClick);
+      });
+      document.querySelectorAll("[data-dashboard-view]").forEach((button) => {
+        button.addEventListener("click", handleDashboardViewClick);
+      });
+      document.querySelectorAll("[data-slot-course]").forEach((button) => {
+        button.addEventListener("click", handleSlotCourseClick);
+      });
+    }
+
+    function handleApplyFiltersClick() {
+      invalidateSlotData();
+      requestDashboardData(readSelectedFilters());
+    }
+
+    function handleRefreshClick() {
+      const selectedFilters = readSelectedFilters();
+
+      invalidateSlotData();
+      selectedFilters.forceRefresh = true;
+      requestDashboardData(selectedFilters);
+    }
+
+    function handleRegionFilterChange() {
+      dashboardState.pendingBranchKey = "ALL";
+      updateBranchOptions("ALL");
+    }
+
+    function rememberBranchSelection(event) {
+      dashboardState.pendingBranchKey =
+        event.currentTarget.value || "ALL";
+    }
+
+    function invalidateSlotData() {
+      cancelSlotDataPrefetch();
+      dashboardState.slotData = null;
+      dashboardState.slotLoading = false;
+      dashboardState.slotRequestKey = "";
+    }
+
+    function cancelSlotDataPrefetch() {
+      if (dashboardState.slotPrefetchTimer == null) {
+        return;
+      }
+
+      window.clearTimeout(dashboardState.slotPrefetchTimer);
+      dashboardState.slotPrefetchTimer = null;
+    }
+
+    function handleDatePresetClick(event) {
+      const selectedPreset = event.currentTarget.dataset.preset;
+
+      applyDatePreset(selectedPreset);
+    }
+
+    function handleDashboardViewClick(event) {
+      showDashboardView(event.currentTarget.dataset.dashboardView);
+    }
+
+    function showDashboardView(viewId) {
+      dashboardState.activeView = viewId;
+
+      document.querySelectorAll("[data-dashboard-view]").forEach(
+        (viewButton) => {
+          const isActive = viewButton.dataset.dashboardView === viewId;
+
+          viewButton.classList.toggle("active", isActive);
+          viewButton.setAttribute(
+            "aria-selected",
+            isActive ? "true" : "false",
+          );
+        },
+      );
+
+      ["overviewView", "slotUtilizationView"].forEach((panelId) => {
+        getElementById(panelId).classList.toggle(
+          "hidden",
+          panelId !== viewId,
+        );
+      });
+
+      if (viewId === "slotUtilizationView") {
+        ensureSlotUtilizationData();
+      }
+    }
+
+    function handleSlotCourseClick(event) {
+      dashboardState.slotCourse =
+        event.currentTarget.dataset.slotCourse;
+
+      document.querySelectorAll("[data-slot-course]").forEach(
+        (courseButton) => {
+          const isActive =
+            courseButton.dataset.slotCourse ===
+            dashboardState.slotCourse;
+
+          courseButton.classList.toggle("active", isActive);
+          courseButton.setAttribute(
+            "aria-selected",
+            isActive ? "true" : "false",
+          );
+        },
+      );
+
+      renderSlotUtilizationView();
+    }
+
+    function handleSlotLedgerClick(event) {
+      const branchButton = event.target.closest(
+        "[data-slot-branch-key]",
+      );
+
+      if (!branchButton || !dashboardState.slotData) {
+        return;
+      }
+
+      const selectedBranch = findSlotBranchByKey(
+        branchButton.dataset.slotBranchKey,
+      );
+
+      if (selectedBranch) {
+        openSlotAnalyticsDialog(
+          selectedBranch,
+          branchButton,
+        );
+      }
+    }
+
+    function findSlotBranchByKey(branchKey) {
+      const courseData = getSelectedCapacityCourse();
+
+      if (!courseData) {
+        return null;
+      }
+
+      return courseData.branches.find(
+        (branch) => branch.branchKey === branchKey,
+      ) || null;
+    }
+
+    function handleBranchTableClick(event) {
+      const branchButton = event.target.closest("[data-branch-key]");
+
+      if (!branchButton || !dashboardState.data) {
+        return;
+      }
+
+      const selectedBranch = findBranchByKey(branchButton.dataset.branchKey);
+
+      if (!selectedBranch) {
+        return;
+      }
+
+      openBranchUtilizationDialog(selectedBranch, branchButton);
+    }
+
+    function findBranchByKey(branchKey) {
+      return dashboardState.data.branches.find(
+        (branch) => branch.branchKey === branchKey,
+      );
+    }
+
+    function handleSlotDialogBackdropClick(event) {
+      if (event.target === event.currentTarget) {
+        closeBranchUtilizationDialog();
+      }
+    }
+
+
+    function requestDashboardData(selectedFilters, useSilentRefresh) {
+      if (dashboardState.loading) {
+        return;
+      }
+
+      dashboardState.loading = true;
+      updateErrorBanner("");
+
+      if (!useSilentRefresh) {
+        setLoadingState(true);
+      }
+
+      if (isAppsScriptRuntime()) {
+        google.script.run
+          .withSuccessHandler(handleDashboardDataSuccess)
+          .withFailureHandler(handleDashboardDataFailure)
+          .getDashboardData(selectedFilters || {});
+
+        return;
+      }
+
+      loadLocalPreview();
+    }
+
+    function isAppsScriptRuntime() {
+      return Boolean(
+        window.google &&
+          google.script &&
+          google.script.run &&
+          typeof google.script.run.withSuccessHandler === "function",
+      );
+    }
+
+    function loadLocalPreview() {
+      dashboardState.localPreview = true;
+      window.setTimeout(finishLoadingLocalPreview, 250);
+    }
+
+    function finishLoadingLocalPreview() {
+      handleDashboardDataSuccess(buildPreviewData());
+    }
+
+    function handleDashboardDataSuccess(dashboardData) {
+      if (isAppsScriptRuntime()) {
+        dashboardState.localPreview = false;
+      }
+
+      dashboardState.data = dashboardData;
+      dashboardState.loading = false;
+      updateFilterControls();
+      renderDashboardView();
+    }
+
+    function handleDashboardDataFailure(error) {
+      const errorMessage = getErrorMessage(error);
+
+      dashboardState.loading = false;
+      setLoadingState(false);
+      updateErrorBanner(
+        errorMessage ||
+          "The dashboard could not read the Sheet. Confirm the tab names and deployment access.",
+      );
+    }
+
+    function getErrorMessage(error) {
+      if (!error) {
+        return "";
+      }
+
+      if (error.message) {
+        return error.message;
+      }
+
+      return String(error);
+    }
+
+    function setLoadingState(isLoading) {
+      getElementById("loadingCover").classList.toggle("hidden", !isLoading);
+      getElementById("dashboard").setAttribute(
+        "aria-busy",
+        isLoading ? "true" : "false",
+      );
+      getElementById("refreshButton").disabled = isLoading;
+      getElementById("applyButton").disabled = isLoading;
+    }
+
+    function updateErrorBanner(message) {
+      const errorBanner = getElementById("errorBanner");
+
+      errorBanner.textContent = message;
+      errorBanner.classList.toggle("hidden", !message);
+    }
+
+    function readSelectedFilters() {
+      const branchSelect = getElementById("branchFilter");
+      const selectedBranch =
+        branchSelect.value || dashboardState.pendingBranchKey || "ALL";
+
+      dashboardState.pendingBranchKey = selectedBranch;
+
+      return {
+        startDate: getElementById("startDate").value,
+        endDate: getElementById("endDate").value,
+        region: getElementById("regionFilter").value,
+        branch: selectedBranch,
+      };
+    }
+
+    function updateFilterControls() {
+      const dashboardData = dashboardState.data;
+      const selectedRegion = dashboardData.filtersApplied.region || "ALL";
+      const selectedBranch = dashboardData.filtersApplied.branch || "ALL";
+
+      updateDateInputs(dashboardData);
+      updateRegionOptions(dashboardData, selectedRegion);
+      updateBranchOptions(selectedBranch);
+      updateAvailableDateCaption(dashboardData);
+    }
+
+    function updateDateInputs(dashboardData) {
+      const startDateInput = getElementById("startDate");
+      const endDateInput = getElementById("endDate");
+      const availableDates = dashboardData.availableDateRange;
+
+      startDateInput.min = availableDates.min;
+      startDateInput.max = availableDates.max;
+      startDateInput.value = dashboardData.filtersApplied.startDate;
+      endDateInput.min = availableDates.min;
+      endDateInput.max = availableDates.max;
+      endDateInput.value = dashboardData.filtersApplied.endDate;
+    }
+
+    function updateRegionOptions(dashboardData, selectedRegion) {
+      const regionSelect = getElementById("regionFilter");
+
+      regionSelect.replaceChildren(createOptionElement("ALL", "All regions"));
+      dashboardData.options.regions.forEach((region) => {
+        regionSelect.appendChild(createOptionElement(region, region));
+      });
+      regionSelect.value = selectedRegion;
+    }
+
+    function updateAvailableDateCaption(dashboardData) {
+      getElementById("dateCaption").textContent =
+        `Available: ${formatFriendlyDate(dashboardData.availableDateRange.min)} – ` +
+        `${formatFriendlyDate(dashboardData.availableDateRange.max)}`;
+    }
+
+    function updateBranchOptions(preferredValue) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const branchSelect = getElementById("branchFilter");
+      const status = getElementById("branchFilterStatus");
+      const selectedBranch =
+        typeof preferredValue === "string"
+          ? preferredValue
+          : dashboardState.pendingBranchKey || branchSelect.value || "ALL";
+      const selectedRegion = getElementById("regionFilter").value;
+      const matchingBranches = dashboardState.data.options.branches.filter(
+        (branch) =>
+          selectedRegion === "ALL" || branch.region === selectedRegion,
+      );
+
+      branchSelect.replaceChildren(createOptionElement("ALL", "All branches"));
+
+      matchingBranches.forEach((branch) => {
+        branchSelect.appendChild(
+          createOptionElement(branch.branchKey, branch.branchName),
+        );
+      });
+
+      const selectedBranchExists = Array.from(branchSelect.options).some(
+        (option) => option.value === selectedBranch,
+      );
+
+      branchSelect.value = selectedBranchExists ? selectedBranch : "ALL";
+      dashboardState.pendingBranchKey = branchSelect.value;
+      branchSelect.disabled = matchingBranches.length === 0;
+
+      if (status) {
+        status.textContent =
+          selectedRegion === "ALL"
+            ? `${formatCount(matchingBranches.length)} branches available. Choose a region to shorten the list.`
+            : `${formatCount(matchingBranches.length)} branches available in ${selectedRegion}.`;
+      }
+    }
+
+    function createOptionElement(value, label) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }
+
+    function applyDatePreset(preset) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const availableDates = dashboardState.data.availableDateRange;
+      const maximumDate = parseIsoDate(availableDates.max);
+      const minimumDate = parseIsoDate(availableDates.min);
+      let selectedStartDate = new Date(maximumDate);
+
+      if (preset === "week") {
+        const daysSinceMonday = (maximumDate.getDay() + 6) % 7;
+        selectedStartDate.setDate(
+          selectedStartDate.getDate() - daysSinceMonday,
+        );
+      } else if (preset === "2weeks") {
+        selectedStartDate.setDate(selectedStartDate.getDate() - 13);
+      } else {
+        selectedStartDate = minimumDate;
+      }
+
+      if (selectedStartDate < minimumDate) {
+        selectedStartDate = new Date(minimumDate);
+      }
+
+      getElementById("startDate").value = toIsoDate(selectedStartDate);
+      getElementById("endDate").value = toIsoDate(maximumDate);
+      invalidateSlotData();
+      requestDashboardData(readSelectedFilters());
+    }
+
+    function renderDashboardView() {
+      const dashboardData = dashboardState.data;
+      const renderVersion = dashboardState.renderVersion + 1;
+
+      dashboardState.renderVersion = renderVersion;
+
+      renderConnectionStatus();
+      renderKpiCards(dashboardData);
+      renderCapacityCards(dashboardData);
+      renderSourceMetadata(dashboardData);
+      showDashboardView(dashboardState.activeView);
+      setLoadingState(false);
+      scheduleSlotDataPrefetch();
+
+      window.requestAnimationFrame(() => {
+        if (renderVersion !== dashboardState.renderVersion) {
+          return;
+        }
+
+        renderDashboardCharts(dashboardData.charts);
+
+        window.requestAnimationFrame(() => {
+          if (renderVersion !== dashboardState.renderVersion) {
+            return;
+          }
+
+          renderBranchPerformanceTable();
+
+          if (dashboardState.activeView === "slotUtilizationView") {
+            ensureSlotUtilizationData();
+          }
+        });
+      });
+    }
+
+    function renderConnectionStatus() {
+      getElementById("modeText").textContent = dashboardState.localPreview
+        ? "Local preview — sample data"
+        : "Read-only live Sheet";
+      getElementById("modePill").style.borderColor = dashboardState.localPreview
+        ? "#f1d39a"
+        : "#cde8e4";
+      getElementById("modePill").style.color = dashboardState.localPreview
+        ? "#9a5a00"
+        : "var(--teal)";
+    }
+
+    function renderKpiCards(dashboardData) {
+      const dashboardKpis = dashboardData.kpis;
+
+      getElementById("kpiSales").textContent = formatCurrency(
+        dashboardKpis.sales,
+      );
+      getElementById("kpiSalesSub").textContent =
+        `${formatCount(dashboardData.health.salesRowsMatched)} matched sales rows`;
+      getElementById("kpiTarget").textContent =
+        dashboardKpis.targetAchievement == null
+          ? "—"
+          : formatPercent(dashboardKpis.targetAchievement);
+      getElementById("kpiTargetSub").textContent =
+        dashboardKpis.target > 0
+          ? `${formatCurrency(dashboardKpis.sales)} of ${formatCurrency(dashboardKpis.target)}`
+          : "No monthly target found in this selection";
+      getElementById("kpiTransactions").textContent = formatCount(
+        dashboardKpis.transactions,
+      );
+      getElementById("kpiTransactionsSub").textContent =
+        `Average ticket: ${formatCurrency(dashboardKpis.averageTicket)}`;
+      getElementById("kpiExpenses").textContent = formatCurrency(
+        dashboardKpis.expenses,
+      );
+      getElementById("kpiResult").textContent = formatCurrency(
+        dashboardKpis.salesLessDisbursements,
+      );
+      getElementById("resultCard").classList.toggle(
+        "negative",
+        dashboardKpis.salesLessDisbursements < 0,
+      );
+    }
+
+    function renderCapacityCards(dashboardData) {
+      const dashboardKpis = dashboardData.kpis;
+
+      renderCapacityMetric("tdc", dashboardKpis.tdcUtilization);
+      renderCapacityTrend(
+        "tdc",
+        dashboardKpis.tdcTrend,
+        getCapacityCoverage(dashboardData, "tdc"),
+      );
+      renderCapacityMetric("pdc", dashboardKpis.pdcUtilization);
+      renderCapacityTrend(
+        "pdc",
+        dashboardKpis.pdcTrend,
+        getCapacityCoverage(dashboardData, "pdc"),
+      );
+    }
+
+    function getCapacityCoverage(dashboardData, coursePrefix) {
+      const comparableBranches = (dashboardData.branches || []).filter(
+        (branch) => {
+          const trend = branch[`${coursePrefix}Trend`];
+          return trend && trend.changePercentagePoints != null;
+        },
+      ).length;
+
+      return { comparableBranches };
+    }
+
+    function renderSourceMetadata(dashboardData) {
+      getElementById("sourceName").textContent = dashboardState.localPreview
+        ? "Preview dataset"
+        : dashboardData.meta.spreadsheetName;
+      getElementById("sourceMeta").textContent =
+        `Data through ${
+          dashboardData.meta.dataAsOf
+            ? formatFriendlyDate(dashboardData.meta.dataAsOf)
+            : "—"
+        } · ` +
+        `${getSourceLoadLabel(dashboardData.meta)} · ` +
+        `Updated ${dashboardData.meta.refreshedAt} · ` +
+        `${formatCount(dashboardData.options.branches.length)} available branches`;
+      getElementById("trendBucket").textContent =
+        `${dashboardData.meta.trendBucket.toLowerCase()} view`;
+    }
+
+    function getSourceLoadLabel(dashboardMeta) {
+      if (dashboardState.localPreview) {
+        return "Local preview";
+      }
+
+      if (dashboardMeta.sourceCacheStatus === "HIT") {
+        return `Cached Sheet data (${dashboardMeta.sourceCacheMinutes} min max)`;
+      }
+
+      if (dashboardMeta.sourceCacheStatus === "BYPASSED") {
+        return "Fresh Sheet read (cache unavailable)";
+      }
+
+      return "Fresh Sheet read";
+    }
+
+    function renderDashboardCharts(dashboardCharts) {
+      renderSalesTrendChart(dashboardCharts.salesTrend);
+      renderServiceMixChart(dashboardCharts.serviceMix);
+      renderHorizontalBars(
+        "topBranchesChart",
+        dashboardCharts.topBranches,
+        formatCurrency,
+        true,
+      );
+      renderHorizontalBars(
+        "customerMixChart",
+        dashboardCharts.customerMix,
+        formatCount,
+        false,
+      );
+      renderHorizontalBars(
+        "expenseMixChart",
+        dashboardCharts.expenseMix,
+        formatCurrency,
+        false,
+      );
+    }
+
+    function renderCapacityMetric(prefix, value) {
+      const boundedUtilization =
+        value == null ? 0 : Math.max(0, Math.min(100, value));
+
+      getElementById(`${prefix}Ring`).style.setProperty(
+        "--pct",
+        boundedUtilization,
+      );
+      getElementById(`${prefix}Value`).textContent =
+        value == null ? "No data" : formatPercent(value);
+    }
+
+    function renderCapacityTrend(prefix, trend, coverage) {
+      const safeTrend = trend || {
+        status: "INSUFFICIENT_DATA",
+        changePercentagePoints: null,
+      };
+      const presentation = getTrendPresentation(safeTrend.status);
+      const badge = getElementById(`${prefix}TrendBadge`);
+      const detail = getElementById(`${prefix}TrendDetail`);
+      const label =
+        safeTrend.status === "GROWING"
+          ? "Increasing"
+          : presentation.label;
+
+      badge.className =
+        `capacity-trend-badge ${presentation.className}`;
+      badge.textContent = `${presentation.symbol} ${label}`;
+
+      detail.textContent =
+        safeTrend.changePercentagePoints == null
+          ? "No prior slot record found for comparison"
+          : `${formatSignedPercentagePoints(
+              safeTrend.changePercentagePoints,
+            )} vs prior slot record · ${formatCount(
+              coverage.comparableBranches,
+            )} branches compared`;
+    }
+
+    function getFilterRequestKey(filters) {
+      return [
+        filters.startDate || "",
+        filters.endDate || "",
+        filters.region || "ALL",
+        filters.branch || "ALL",
+      ].join("|");
+    }
+
+    function getAppliedSlotFilters() {
+      const applied = dashboardState.data
+        ? dashboardState.data.filtersApplied
+        : null;
+
+      return applied
+        ? {
+            startDate: applied.startDate,
+            endDate: applied.endDate,
+            region: applied.region || "ALL",
+            branch: applied.branch || "ALL",
+          }
+        : readSelectedFilters();
+    }
+
+    function shouldPrefetchSlotData() {
+      if (
+        !isAppsScriptRuntime() ||
+        dashboardState.localPreview ||
+        dashboardState.loading ||
+        dashboardState.slotData ||
+        dashboardState.slotLoading ||
+        dashboardState.activeView !== "overviewView"
+      ) {
+        return false;
+      }
+
+      const connection =
+        navigator.connection ||
+        navigator.mozConnection ||
+        navigator.webkitConnection;
+
+      if (!connection) {
+        return true;
+      }
+
+      if (connection.saveData) {
+        return false;
+      }
+
+      return !/2g/i.test(connection.effectiveType || "");
+    }
+
+    function scheduleSlotDataPrefetch() {
+      cancelSlotDataPrefetch();
+
+      if (!shouldPrefetchSlotData()) {
+        return;
+      }
+
+      dashboardState.slotPrefetchTimer = window.setTimeout(() => {
+        dashboardState.slotPrefetchTimer = null;
+
+        if (!shouldPrefetchSlotData()) {
+          return;
+        }
+
+        ensureSlotUtilizationData({
+          filters: getAppliedSlotFilters(),
+          silent: true,
+        });
+      }, 900);
+    }
+
+    function ensureSlotUtilizationData(options) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const requestOptions = options || {};
+      const filters = requestOptions.filters || readSelectedFilters();
+      const silent = requestOptions.silent === true;
+      const requestKey = getFilterRequestKey(filters);
+
+      if (
+        dashboardState.slotData &&
+        dashboardState.slotRequestKey === requestKey
+      ) {
+        if (!silent || dashboardState.activeView === "slotUtilizationView") {
+          renderSlotUtilizationView();
+        }
+        return;
+      }
+
+      if (
+        dashboardState.slotLoading &&
+        dashboardState.slotRequestKey === requestKey
+      ) {
+        if (!silent) {
+          renderSlotLoadingState();
+        }
+        return;
+      }
+
+      dashboardState.slotLoading = true;
+      dashboardState.slotRequestKey = requestKey;
+
+      if (!silent) {
+        renderSlotLoadingState();
+      }
+
+      if (!isAppsScriptRuntime()) {
+        dashboardState.slotData = {
+          filtersApplied: dashboardState.data.filtersApplied,
+          capacity: dashboardState.data.capacity,
+        };
+        dashboardState.slotLoading = false;
+        renderSlotUtilizationView();
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler((slotData) => {
+          if (dashboardState.slotRequestKey !== requestKey) {
+            return;
+          }
+
+          dashboardState.slotData = slotData;
+          dashboardState.slotLoading = false;
+
+          if (dashboardState.activeView === "slotUtilizationView") {
+            renderSlotUtilizationView();
+          }
+        })
+        .withFailureHandler((error) => {
+          if (dashboardState.slotRequestKey !== requestKey) {
+            return;
+          }
+
+          dashboardState.slotLoading = false;
+
+          if (!silent || dashboardState.activeView === "slotUtilizationView") {
+            renderSlotLoadingFailure(error);
+          } else {
+            dashboardState.slotRequestKey = "";
+            console.warn(
+              "Background TDC/PDC preload failed: " +
+                (getErrorMessage(error) || "Unknown error"),
+            );
+          }
+        })
+        .getSlotUtilizationData(filters);
+    }
+
+    function renderSlotLoadingState() {
+      getElementById("slotLatestUtilization").textContent = "…";
+      getElementById("slotUsedOfAllocated").textContent = "…";
+      getElementById("slotIdleSlots").textContent = "…";
+      getElementById("slotPeriodAverage").textContent = "…";
+      getElementById("slotComparableBranches").textContent = "…";
+      getElementById("slotComparableBasis").textContent =
+        "Loading comparison coverage…";
+      setSlotDataQualityPanelState(
+        "…",
+        "Loading branch coverage and validation details…",
+      );
+
+      getElementById("slotLatestBasis").textContent =
+        "Reading cached slot records…";
+
+      getElementById("slotPeriodReports").textContent =
+        "Preparing weekly utilization";
+
+      getElementById("slotHeroFootnote").textContent =
+        "Loading detailed TDC/PDC slot data…";
+
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotBranchCount").textContent = "Loading…";
+
+      getElementById("slotUtilizationRows").innerHTML =
+        '<div class="slot-inline-loader"><div>Loading detailed TDC/PDC records…</div></div>';
+    }
+
+    function setSlotDataQualityPanelState(value, message) {
+      [
+        "slotOfficialBranches",
+        "slotUsableBranches",
+        "slotNoDataBranches",
+        "slotBehindBranches",
+      ].forEach((elementId) => {
+        getElementById(elementId).textContent = value;
+      });
+
+      getElementById("slotDataQualitySubtitle").textContent = message;
+      getElementById("slotLatestReportingPeriod").textContent =
+        "Latest reporting week: —";
+      getElementById("slotBehindBranchesHelp").textContent =
+        "Latest branch record is older than the newest report";
+      getElementById("slotValidationSummary").textContent = message;
+      getElementById("slotValidationRows").innerHTML =
+        value === "…"
+          ? '<div class="slot-validation-empty">Loading validation details…</div>'
+          : `<div class="slot-validation-empty">${escapeHtml(message)}</div>`;
+    }
+
+    function renderSlotLoadingFailure(error) {
+      const message =
+        getErrorMessage(error) ||
+        "The detailed slot data could not be loaded.";
+
+      dashboardState.slotLoading = false;
+
+      getElementById("slotLatestUtilization").textContent = "Error";
+      getElementById("slotUsedOfAllocated").textContent = "—";
+      getElementById("slotIdleSlots").textContent = "—";
+      getElementById("slotPeriodAverage").textContent = "—";
+      getElementById("slotComparableBranches").textContent = "—";
+      getElementById("slotComparableBasis").textContent =
+        "Comparison coverage unavailable";
+      setSlotDataQualityPanelState(
+        "—",
+        "Unable to load branch coverage details.",
+      );
+
+      getElementById("slotLatestBasis").textContent =
+        "Unable to load slot records";
+
+      getElementById("slotPeriodReports").textContent =
+        "Check Apps Script executions";
+
+      getElementById("slotHeroFootnote").textContent = message;
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotSystemProgressFill").style.width = "0%";
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        "0",
+      );
+      getElementById("slotBranchCount").textContent = "Unable to load";
+
+      getElementById("slotUtilizationRows").innerHTML =
+        `<div class="slot-ledger-empty">${escapeHtml(message)}</div>`;
+
+      updateErrorBanner(`TDC/PDC data error: ${message}`);
+    }
+
+    function renderSlotUtilizationView() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const courseCode = dashboardState.slotCourse.toUpperCase();
+      const dashboardData = dashboardState.data;
+      const selectedRange = dashboardData.filtersApplied;
+      const isAllAvailable =
+        selectedRange.startDate === dashboardData.availableDateRange.min &&
+        selectedRange.endDate === dashboardData.availableDateRange.max;
+
+      getElementById("slotCourseTitle").textContent =
+        `${courseCode} Slot Utilization`;
+      getElementById("slotSelectionRange").textContent =
+        `${isAllAvailable ? "All available · " : ""}` +
+        `${formatFriendlyDate(selectedRange.startDate)} – ` +
+        `${formatFriendlyDate(selectedRange.endDate)}`;
+      getElementById("slotSelectionExplanation").textContent =
+        isAllAvailable
+          ? `All available data is selected. Current status uses each branch’s latest ${courseCode} slot record; the selected-period average uses every usable weekly record.`
+          : `Current status uses each branch’s latest available ${courseCode} slot record inside the selected dates; the selected-period average uses all usable weekly records in those dates.`;
+
+      if (!dashboardState.slotData) {
+        if (!dashboardState.slotLoading) {
+          ensureSlotUtilizationData();
+        }
+        return;
+      }
+
+      const courseData = getSelectedCapacityCourse();
+
+      if (!courseData) {
+        renderEmptySlotUtilizationView(courseCode);
+        return;
+      }
+
+      renderSlotSummary(courseData);
+      renderSlotUtilizationRows();
+    }
+
+    function getSelectedCapacityCourse() {
+      const capacity =
+        dashboardState.slotData && dashboardState.slotData.capacity;
+
+      return capacity
+        ? capacity[dashboardState.slotCourse]
+        : null;
+    }
+
+    function renderEmptySlotUtilizationView(courseCode) {
+      getElementById("slotLatestUtilization").textContent = "—";
+      getElementById("slotUsedOfAllocated").textContent = "—";
+      getElementById("slotIdleSlots").textContent = "—";
+      getElementById("slotPeriodAverage").textContent = "—";
+      getElementById("slotComparableBranches").textContent = "—";
+      getElementById("slotComparableBasis").textContent =
+        "No usable branch comparison";
+      setSlotDataQualityPanelState(
+        "—",
+        `No ${courseCode} branch coverage was found in this selection.`,
+      );
+      getElementById("slotPeriodReports").textContent =
+        "No usable weekly records";
+      getElementById("slotLatestBasis").textContent =
+        "No reporting branches";
+      getElementById("slotHeroFootnote").textContent =
+        `No ${courseCode} slot allocation data was found in this selection.`;
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotSystemProgressFill").style.width = "0%";
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        "0",
+      );
+      getElementById("slotUtilizationRows").innerHTML =
+        '<div class="slot-ledger-empty">No slot records match the selected dates and filters.</div>';
+      getElementById("slotBranchCount").textContent =
+        "0 branches";
+    }
+
+    function renderSlotSummary(courseData) {
+      const summary = courseData.summary;
+      const latest = summary.latest;
+      const periodAverage = summary.periodAverage;
+      const coverage = summary.coverage;
+      const counts = summary.movementCounts;
+      const currentUtilization = latest.utilization;
+      const boundedUtilization =
+        currentUtilization == null
+          ? 0
+          : Math.max(0, Math.min(100, currentUtilization));
+
+      getElementById("slotLatestUtilization").textContent =
+        currentUtilization == null
+          ? "—"
+          : formatPercent(currentUtilization);
+      getElementById("slotUsedOfAllocated").textContent =
+        latest.allocated > 0
+          ? `${formatCount(latest.used)} of ${formatCount(
+              latest.allocated,
+            )}`
+          : "—";
+      getElementById("slotIdleSlots").textContent =
+        latest.allocated > 0
+          ? formatCount(latest.idle)
+          : "—";
+      getElementById("slotPeriodAverage").textContent =
+        periodAverage.utilization == null
+          ? "—"
+          : formatPercent(periodAverage.utilization);
+      getElementById("slotComparableBranches").textContent =
+        `${formatCount(
+          coverage.comparableBranches,
+        )} of ${formatCount(
+          coverage.branchesWithUtilization,
+        )}`;
+      const officialBranchCount =
+        coverage.officialBranches || courseData.branches.length;
+      getElementById("slotComparableBasis").textContent =
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} usable branches · ${formatCount(
+          officialBranchCount,
+        )} official total`;
+
+      getElementById("slotLatestBasis").textContent =
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} of ${formatCount(
+          officialBranchCount,
+        )} official branches have usable utilization`;
+      getElementById("slotPeriodReports").textContent =
+        `${formatCount(
+          periodAverage.reports,
+        )} weekly branch records in the selection`;
+      getElementById("slotSystemProgressFill").style.width =
+        `${boundedUtilization}%`;
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        String(boundedUtilization),
+      );
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuetext",
+        currentUtilization == null
+          ? "No current utilization"
+          : `${formatPercent(currentUtilization)} utilized`,
+      );
+      getElementById("slotHeroFootnote").textContent =
+        `${formatCount(latest.idle)} current slots are unused across ` +
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} reporting branches.`;
+      getElementById("slotMovementSummary").textContent =
+        `↑ ${formatCount(counts.growing)} increasing · ` +
+        `→ ${formatCount(counts.stable)} stable · ` +
+        `↓ ${formatCount(counts.declining)} declining`;
+
+      renderSlotDataQuality(courseData);
+    }
+
+    function renderSlotDataQuality(courseData) {
+      const summary = courseData.summary || {};
+      const coverage = summary.coverage || {};
+      const branches = courseData.branches || [];
+      const officialBranches =
+        coverage.officialBranches != null
+          ? coverage.officialBranches
+          : branches.length;
+      const usableBranches =
+        coverage.branchesWithUtilization != null
+          ? coverage.branchesWithUtilization
+          : branches.filter(
+              (branch) => branch.latest.utilization != null,
+            ).length;
+      const noDataBranches =
+        coverage.branchesWithoutUsableUtilization != null
+          ? coverage.branchesWithoutUsableUtilization
+          : Math.max(officialBranches - usableBranches, 0);
+      const behindBranches =
+        coverage.branchesBehindLatest != null
+          ? coverage.branchesBehindLatest
+          : branches.filter((branch) => {
+              const freshness = getSlotFreshness(branch);
+              return (
+                freshness.status === "BEHIND" ||
+                freshness.status === "STALE"
+              );
+            }).length;
+      const staleBranches =
+        coverage.staleBranches != null
+          ? coverage.staleBranches
+          : branches.filter(
+              (branch) =>
+                getSlotFreshness(branch).status === "STALE",
+            ).length;
+      const latestReportingPeriod =
+        summary.latestReportingPeriod &&
+        summary.latestReportingPeriod.periodLabel
+          ? summary.latestReportingPeriod.periodLabel
+          : "—";
+
+      getElementById("slotOfficialBranches").textContent =
+        formatCount(officialBranches);
+      getElementById("slotUsableBranches").textContent =
+        `${formatCount(usableBranches)} of ${formatCount(
+          officialBranches,
+        )}`;
+      getElementById("slotNoDataBranches").textContent =
+        formatCount(noDataBranches);
+      getElementById("slotBehindBranches").textContent =
+        formatCount(behindBranches);
+      getElementById("slotLatestReportingPeriod").textContent =
+        `Latest reporting week: ${latestReportingPeriod}`;
+      getElementById("slotDataQualitySubtitle").textContent =
+        `${courseData.courseCode}: ${formatCount(
+          usableBranches,
+        )} of ${formatCount(
+          officialBranches,
+        )} official branches have a usable utilization percentage.`;
+
+      if (behindBranches === 0) {
+        getElementById("slotBehindBranchesHelp").textContent =
+          "All recorded branches are on the latest reporting week";
+      } else if (staleBranches === 0) {
+        getElementById("slotBehindBranchesHelp").textContent =
+          `${formatCount(
+            behindBranches,
+          )} branch record(s) are one week behind`;
+      } else {
+        getElementById("slotBehindBranchesHelp").textContent =
+          `${formatCount(
+            staleBranches,
+          )} stale by 2+ weeks; ${formatCount(
+            behindBranches - staleBranches,
+          )} one week behind`;
+      }
+
+      renderSlotValidationList(courseData);
+    }
+
+    function renderSlotValidationList(courseData) {
+      const host = getElementById("slotValidationRows");
+      const branches = courseData.branches || [];
+      const reviewBranches = branches.filter((branch) => {
+        const freshness = getSlotFreshness(branch);
+
+        return (
+          branch.latest.utilization == null ||
+          freshness.status === "BEHIND" ||
+          freshness.status === "STALE"
+        );
+      });
+
+      reviewBranches.sort((firstBranch, secondBranch) => {
+        const firstNoData =
+          firstBranch.latest.utilization == null ? 0 : 1;
+        const secondNoData =
+          secondBranch.latest.utilization == null ? 0 : 1;
+
+        if (firstNoData !== secondNoData) {
+          return firstNoData - secondNoData;
+        }
+
+        const firstLag =
+          getSlotFreshness(firstBranch).lagWeeks || 0;
+        const secondLag =
+          getSlotFreshness(secondBranch).lagWeeks || 0;
+
+        if (firstLag !== secondLag) {
+          return secondLag - firstLag;
+        }
+
+        return firstBranch.branchName.localeCompare(
+          secondBranch.branchName,
+        );
+      });
+
+      host.replaceChildren(
+        ...reviewBranches.map(createSlotValidationRow),
+      );
+
+      const noDataCount = reviewBranches.filter(
+        (branch) => branch.latest.utilization == null,
+      ).length;
+      const behindCount = reviewBranches.filter((branch) => {
+        const status = getSlotFreshness(branch).status;
+        return status === "BEHIND" || status === "STALE";
+      }).length;
+
+      getElementById("slotValidationSummary").textContent =
+        reviewBranches.length
+          ? `${formatCount(
+              reviewBranches.length,
+            )} branch(es) need review · ${formatCount(
+              noDataCount,
+            )} no usable percentage · ${formatCount(
+              behindCount,
+            )} behind the latest week`
+          : "No source-data issues were detected for this selection.";
+
+      if (!reviewBranches.length) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "slot-validation-empty";
+        emptyState.textContent =
+          "All branches have usable current records for this selection.";
+        host.appendChild(emptyState);
+      }
+    }
+
+    function createSlotValidationRow(branch) {
+      const row = document.createElement("div");
+      const dataQuality = getSlotDataQuality(branch);
+      const freshness = getSlotFreshness(branch);
+      const hasNoData = branch.latest.utilization == null;
+      const issueParts = [];
+      const actionParts = [];
+
+      row.className = "slot-validation-row";
+
+      if (hasNoData) {
+        issueParts.push(dataQuality.label);
+        actionParts.push(dataQuality.action);
+      }
+
+      if (
+        freshness.status === "BEHIND" ||
+        freshness.status === "STALE"
+      ) {
+        issueParts.push(freshness.label);
+        actionParts.push(
+          "Confirm that the latest weekly record was encoded",
+        );
+      }
+
+      row.append(
+        createSlotValidationCell(
+          "Branch",
+          branch.branchName,
+          branch.region,
+          "branch",
+        ),
+        createSlotValidationCell(
+          "Issue",
+          issueParts.join(" · ") || "Review required",
+          "",
+          hasNoData ? "issue" : "stale",
+        ),
+        createSlotValidationCell(
+          "Latest record",
+          branch.latest.periodLabel || "No record",
+          "",
+          "period",
+        ),
+        createSlotValidationCell(
+          "Recommended action",
+          actionParts.join(" · ") ||
+            "Verify the latest source record",
+          "",
+          "action",
+        ),
+      );
+
+      return row;
+    }
+
+    function createSlotValidationCell(
+      label,
+      primaryText,
+      secondaryText,
+      className,
+    ) {
+      const cell = document.createElement("span");
+      const primary = document.createElement("strong");
+
+      cell.className = `slot-validation-cell ${className || ""}`;
+      cell.dataset.label = label;
+      primary.textContent = primaryText;
+      cell.appendChild(primary);
+
+      if (secondaryText) {
+        const secondary = document.createElement("small");
+        secondary.textContent = secondaryText;
+        cell.appendChild(secondary);
+      }
+
+      return cell;
+    }
+
+    function getSlotDataQuality(branch) {
+      if (branch && branch.dataQuality) {
+        return branch.dataQuality;
+      }
+
+      const latest = branch && branch.latest
+        ? branch.latest
+        : {};
+      const allocated = latest.allocated;
+      const used = latest.used;
+      const hasRecord = Boolean(
+        latest.periodKey != null ||
+        latest.periodLabel ||
+        allocated != null ||
+        used != null,
+      );
+
+      if (!hasRecord) {
+        return {
+          code: "NO_RECORD",
+          label: "No slot record found",
+          action: "Verify the branch record in the source Sheet",
+        };
+      }
+
+      if (allocated == null && used != null) {
+        return {
+          code: "MISSING_ALLOCATION",
+          label: "Usage encoded, but allocation is missing",
+          action: "Encode the weekly allocation",
+        };
+      }
+
+      if (allocated === 0 && used != null && used > 0) {
+        return {
+          code: "ZERO_ALLOCATION_WITH_USAGE",
+          label: "Usage encoded, but allocation is zero",
+          action: "Correct the allocation before using the percentage",
+        };
+      }
+
+      if (allocated === 0) {
+        return {
+          code: "ZERO_ALLOCATION",
+          label: "Weekly allocation is zero",
+          action: "Confirm or encode the weekly allocation",
+        };
+      }
+
+      if (allocated > 0 && used == null) {
+        return {
+          code: "MISSING_USAGE",
+          label: "Allocation encoded, but usage is missing",
+          action: "Encode used slots or confirm a recorded zero",
+        };
+      }
+
+      return {
+        code: latest.utilization == null
+          ? "NO_USABLE_PERCENTAGE"
+          : "OK",
+        label: latest.utilization == null
+          ? "No usable utilization percentage"
+          : "Usable utilization record",
+        action: latest.utilization == null
+          ? "Check the allocation and usage values"
+          : "No data correction required",
+      };
+    }
+
+    function getSlotFreshness(branch) {
+      if (branch && branch.freshness) {
+        return branch.freshness;
+      }
+
+      return {
+        status:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? "CURRENT"
+            : "NO_RECORD",
+        lagWeeks:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? 0
+            : null,
+        label:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? "Current"
+            : "No record",
+      };
+    }
+
+    function renderSlotUtilizationRows() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const courseData = getSelectedCapacityCourse();
+      const host = getElementById("slotUtilizationRows");
+
+      if (!courseData) {
+        return;
+      }
+
+      const visibleBranches = filterAndSortCapacityBranches(
+        courseData.branches,
+      );
+
+      host.replaceChildren(
+        ...visibleBranches.map(createSlotLedgerRow),
+      );
+
+      if (!visibleBranches.length) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "slot-ledger-empty";
+        emptyState.textContent =
+          "No branches match this utilization filter.";
+        host.appendChild(emptyState);
+      }
+
+      getElementById("slotBranchCount").textContent =
+        `${formatCount(visibleBranches.length)} of ` +
+        `${formatCount(courseData.branches.length)} branches`;
+      getElementById("slotLedgerSubtitle").textContent =
+        `${dashboardState.slotCourse.toUpperCase()} current status uses each branch’s latest usable record. Select a row for full TDC and PDC detail.`;
+    }
+
+    function filterAndSortCapacityBranches(branches) {
+      const searchText = getElementById("slotBranchSearch")
+        .value.trim()
+        .toLowerCase();
+      const selectedLevel =
+        getElementById("slotLevelFilter").value;
+      const selectedSort = getElementById("slotSort").value;
+      const filteredBranches = branches.filter((branch) => {
+        const matchesSearch =
+          !searchText ||
+          branch.branchName.toLowerCase().includes(searchText) ||
+          branch.region.toLowerCase().includes(searchText);
+        const level = getSlotUtilizationLevel(
+          branch.latest.utilization,
+        );
+        const matchesLevel =
+          selectedLevel === "all" || selectedLevel === level;
+
+        return matchesSearch && matchesLevel;
+      });
+
+      filteredBranches.sort((firstBranch, secondBranch) =>
+        compareCapacityRows(
+          firstBranch,
+          secondBranch,
+          selectedSort,
+        ),
+      );
+
+      return filteredBranches;
+    }
+
+    function compareCapacityRows(
+      firstBranch,
+      secondBranch,
+      selectedSort,
+    ) {
+      if (selectedSort === "branchName") {
+        return firstBranch.branchName.localeCompare(
+          secondBranch.branchName,
+        );
+      }
+
+      if (selectedSort === "idleDesc") {
+        return (
+          (secondBranch.latest.idle || 0) -
+          (firstBranch.latest.idle || 0)
+        );
+      }
+
+      if (selectedSort === "decliningFirst") {
+        const trendOrder = {
+          DECLINING: 0,
+          STABLE: 1,
+          GROWING: 2,
+          INSUFFICIENT_DATA: 3,
+        };
+        const trendDifference =
+          trendOrder[firstBranch.trend.status] -
+          trendOrder[secondBranch.trend.status];
+
+        if (trendDifference !== 0) {
+          return trendDifference;
+        }
+      }
+
+      const firstUtilization =
+        firstBranch.latest.utilization;
+      const secondUtilization =
+        secondBranch.latest.utilization;
+
+      if (firstUtilization == null) {
+        return secondUtilization == null ? 0 : 1;
+      }
+
+      if (secondUtilization == null) {
+        return -1;
+      }
+
+      if (selectedSort === "utilizationDesc") {
+        return secondUtilization - firstUtilization;
+      }
+
+      return firstUtilization - secondUtilization;
+    }
+
+    function createSlotLedgerRow(branch) {
+      const row = document.createElement("button");
+      const latest = branch.latest;
+      const previous = branch.previous;
+      const level = getSlotUtilizationLevel(
+        latest.utilization,
+      );
+      const presentation = getTrendPresentation(
+        branch.trend.status,
+      );
+
+      row.type = "button";
+      row.className = "slot-ledger-row";
+      row.dataset.slotBranchKey = branch.branchKey;
+      row.setAttribute(
+        "aria-label",
+        `View TDC and PDC slot utilization for ${branch.branchName}`,
+      );
+
+      row.append(
+        createSlotBranchIdentity(branch),
+        createSlotRecordCell(branch),
+        createSlotAllocationCell(latest),
+        createSlotMeterCell(branch, level),
+        createSlotUtilizationCell(branch, level),
+        createSlotTrendCell(branch, presentation),
+      );
+
+      return row;
+    }
+
+    function createSlotBranchIdentity(branch) {
+      const cell = document.createElement("span");
+      cell.className = "slot-ledger-branch";
+      const name = document.createElement("strong");
+      name.textContent = branch.branchName;
+      const region = document.createElement("small");
+      region.textContent = branch.region;
+      const arrow = document.createElement("i");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+      cell.append(name, region, arrow);
+      return cell;
+    }
+
+    function createSlotRecordCell(branch) {
+      const cell = document.createElement("span");
+      const titleRow = document.createElement("span");
+      const current = document.createElement("strong");
+      const average = document.createElement("small");
+      const dataQuality = getSlotDataQuality(branch);
+      const freshness = getSlotFreshness(branch);
+      const hasSlotRecord = Boolean(
+        branch.latest.periodLabel ||
+          branch.latest.allocated != null ||
+          branch.latest.used != null,
+      );
+
+      cell.className = "slot-record-cell";
+      titleRow.className = "slot-record-title-row";
+
+      current.textContent = hasSlotRecord
+        ? branch.latest.periodLabel || "Latest available"
+        : "No record in selected period";
+
+      titleRow.appendChild(current);
+
+      if (freshness.label) {
+        const freshnessBadge = document.createElement("span");
+        freshnessBadge.className =
+          `slot-freshness-badge ${freshness.status.toLowerCase()}`;
+        freshnessBadge.textContent = freshness.label;
+        titleRow.appendChild(freshnessBadge);
+      }
+
+      average.textContent =
+        branch.periodAverage.reports <= 0
+          ? "No usable weekly slot records"
+          : branch.periodAverage.utilization == null
+            ? `${formatCount(
+                branch.periodAverage.reports,
+              )} recorded weeks · no usable percentage`
+            : `${formatPercent(
+                branch.periodAverage.utilization,
+              )} period average · ${formatCount(
+                branch.periodAverage.reports,
+              )} records`;
+
+      cell.append(titleRow, average);
+
+      if (dataQuality.code !== "OK") {
+        const issue = document.createElement("small");
+        issue.className = "slot-record-issue";
+        issue.textContent = dataQuality.label;
+        cell.appendChild(issue);
+      }
+
+      return cell;
+    }
+
+    function createSlotAllocationCell(latest) {
+      const cell = document.createElement("span");
+      cell.className = "slot-allocation-cell mono";
+      const value = document.createElement("strong");
+      value.textContent =
+        latest.allocated == null
+          ? "—"
+          : formatCount(latest.allocated);
+      const label = document.createElement("small");
+      label.textContent = "slots";
+      cell.append(value, label);
+      return cell;
+    }
+
+    function createSlotMeterCell(branch, level) {
+      const latest = branch.latest;
+      const dataQuality = getSlotDataQuality(branch);
+      const cell = document.createElement("span");
+      const meter = document.createElement("span");
+      const label = document.createElement("small");
+      const utilization = Number(latest.utilization) || 0;
+      const activeSegments = Math.round(
+        Math.min(Math.max(utilization, 0), 100) / 5,
+      );
+
+      cell.className = "slot-meter-cell";
+      meter.className = `slot-segment-meter ${level}`;
+      meter.setAttribute("aria-hidden", "true");
+
+      for (
+        let segmentIndex = 0;
+        segmentIndex < 20;
+        segmentIndex += 1
+      ) {
+        const segment = document.createElement("i");
+        segment.classList.toggle(
+          "active",
+          segmentIndex < activeSegments,
+        );
+        meter.appendChild(segment);
+      }
+
+      label.className = "mono";
+
+      if (latest.allocated == null && latest.used != null) {
+        label.textContent =
+          `${formatCount(latest.used)} used · allocation missing`;
+      } else if (latest.allocated == null) {
+        label.textContent = "No usable allocation";
+      } else if (latest.used == null) {
+        label.textContent =
+          `${formatCount(latest.allocated)} allocated · usage missing`;
+      } else if (latest.utilization == null) {
+        label.textContent = dataQuality.label;
+      } else {
+        label.textContent =
+          `${formatCount(latest.used)} used · ` +
+          `${formatCount(latest.idle)} idle`;
+      }
+
+      cell.append(meter, label);
+      return cell;
+    }
+
+    function createSlotUtilizationCell(branch, level) {
+      const cell = document.createElement("span");
+      cell.className = "slot-utilization-cell mono";
+      const value = document.createElement("strong");
+      value.className = level;
+      value.textContent =
+        branch.latest.utilization == null
+          ? "—"
+          : formatPercent(branch.latest.utilization);
+      const label = document.createElement("small");
+      label.textContent = getSlotUtilizationLevelLabel(level);
+      cell.append(value, label);
+      return cell;
+    }
+
+    function createSlotTrendCell(branch, presentation) {
+      const trend = branch.trend;
+      const previous = branch.previous;
+      const utilization = branch.latest.utilization;
+      const cell = document.createElement("span");
+      const badge = document.createElement("span");
+      const comparison = document.createElement("small");
+      const action = document.createElement("em");
+
+      cell.className = "slot-ledger-trend";
+      badge.className =
+        `slot-trend-badge ${presentation.className}`;
+      badge.textContent =
+        `${presentation.symbol} ${presentation.label}`;
+      comparison.className = "mono";
+      comparison.textContent =
+        trend.changePercentagePoints == null
+          ? "No prior usable slot record"
+          : `${formatSignedPercentagePoints(
+              trend.changePercentagePoints,
+            )} vs ${previous.periodLabel}`;
+      action.textContent =
+        getSlotUtilizationAction(utilization, branch);
+      cell.append(badge, comparison, action);
+      return cell;
+    }
+
+    function getSlotUtilizationLevel(utilization) {
+      if (utilization == null) {
+        return "noData";
+      }
+
+      if (utilization > 100) {
+        return "overCapacity";
+      }
+
+      if (utilization < 35) {
+        return "low";
+      }
+
+      if (utilization < 70) {
+        return "moderate";
+      }
+
+      return "high";
+    }
+
+    function getSlotUtilizationLevelLabel(level) {
+      const labels = {
+        low: "Low use",
+        moderate: "Moderate",
+        high: "Healthy use",
+        overCapacity: "Over allocation",
+        noData: "No data",
+      };
+
+      return labels[level];
+    }
+
+    function getSlotUtilizationAction(utilization, branch) {
+      if (utilization == null) {
+        return getSlotDataQuality(branch).action;
+      }
+
+      if (utilization > 100) {
+        return "Over allocation — validate used slots and capacity";
+      }
+
+      if (utilization < 35) {
+        return "Review allocation or redistribute idle slots";
+      }
+
+      if (utilization < 70) {
+        return "Build bookings within the branch";
+      }
+
+      if (utilization < 90) {
+        return "Healthy use — monitor";
+      }
+
+      return "Near capacity — review additional slots";
+    }
+
+    function renderSalesTrendChart(points) {
+      const host = getElementById("salesTrendChart");
+      if (!points || !points.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No sales trend data for this selection.</div>';
+        return;
+      }
+
+      const width = 900;
+      const height = 285;
+      const pad = { top: 18, right: 24, bottom: 42, left: 67 };
+      const chartWidth = width - pad.left - pad.right;
+      const chartHeight = height - pad.top - pad.bottom;
+      const maxValue = Math.max(1, ...points.map((point) => point.sales));
+      const yMax = calculateNiceMaximum(maxValue);
+      const xStep =
+        points.length > 1 ? chartWidth / (points.length - 1) : chartWidth;
+      const coords = points.map((point, index) => ({
+        x: pad.left + (points.length === 1 ? chartWidth / 2 : index * xStep),
+        y: pad.top + chartHeight - (point.sales / yMax) * chartHeight,
+        point,
+      }));
+
+      const linePath = coords
+        .map(
+          (item, index) =>
+            `${index ? "L" : "M"} ${item.x.toFixed(1)} ${item.y.toFixed(1)}`,
+        )
+        .join(" ");
+      const areaPath =
+        `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} L ${coords[0].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} Z`;
+
+      const yLines = Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const y = pad.top + chartHeight - ratio * chartHeight;
+        const value = yMax * ratio;
+        return `
+            <line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"
+              stroke="#e9e2d5" stroke-width="1"/>
+            <text x="${pad.left - 10}" y="${y + 4}" text-anchor="end"
+              fill="#747c89" font-size="10">${escapeHtml(formatCompactCurrency(value))}</text>
+          `;
+      }).join("");
+
+      const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+      const xLabels = coords
+        .map((item, index) => {
+          const isRegularLabel = index % labelEvery === 0;
+          const isLastLabel = index === coords.length - 1;
+
+          if (!isRegularLabel && !isLastLabel) {
+            return "";
+          }
+
+          return `
+              <text x="${item.x}" y="${height - 13}" text-anchor="middle"
+                fill="#747c89" font-size="10">${escapeHtml(item.point.label)}</text>
+            `;
+        })
+        .join("");
+
+      const circles = coords
+        .map(
+          (item) => `
+              <circle
+                class="sales-point"
+                cx="${item.x}"
+                cy="${item.y}"
+                r="5"
+                fill="#ffffff"
+                stroke="#c79224"
+                stroke-width="2"
+                tabindex="0"
+                role="img"
+                data-label="${escapeHtml(item.point.label)}"
+                data-sales="${Number(item.point.sales) || 0}"
+                aria-label="${escapeHtml(
+                  `${item.point.label}: ${formatExactCurrency(item.point.sales)}`,
+                )}"
+              >
+                <title>${escapeHtml(
+                  `${item.point.label}: ${formatExactCurrency(item.point.sales)}`,
+                )}</title>
+              </circle>
+            `,
+        )
+        .join("");
+
+      host.innerHTML = `
+          <svg viewBox="0 0 ${width} ${height}" role="img"
+            aria-label="Sales trend chart">
+            <defs>
+              <linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#e4b84e" stop-opacity="0.30"/>
+                <stop offset="100%" stop-color="#e4b84e" stop-opacity="0.03"/>
+              </linearGradient>
+            </defs>
+            ${yLines}
+            <path d="${areaPath}" fill="url(#salesArea)"/>
+            <path d="${linePath}" fill="none" stroke="#0b1f3a" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+            ${circles}
+            ${xLabels}
+          </svg>
+        `;
+
+      enableSalesTrendTooltip(host);
+    }
+
+    function enableSalesTrendTooltip(host) {
+      let tooltip = document.getElementById("salesTrendTooltip");
+
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.id = "salesTrendTooltip";
+        tooltip.className = "sales-trend-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+      }
+
+      function showTooltip(point, clientX, clientY) {
+        const dateLabel = document.createElement("strong");
+        const amountLabel = document.createElement("span");
+
+        dateLabel.textContent = point.dataset.label;
+        amountLabel.textContent = formatExactCurrency(point.dataset.sales);
+
+        tooltip.replaceChildren(dateLabel, amountLabel);
+        tooltip.classList.add("visible");
+
+        const gap = 14;
+        const tooltipWidth = tooltip.offsetWidth;
+        const tooltipHeight = tooltip.offsetHeight;
+        let left = clientX + gap;
+        let top = clientY - tooltipHeight - gap;
+
+        if (left + tooltipWidth > window.innerWidth - 10) {
+          left = clientX - tooltipWidth - gap;
+        }
+
+        if (top < 10) {
+          top = clientY + gap;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function hideTooltip() {
+        tooltip.classList.remove("visible");
+      }
+
+      host.querySelectorAll(".sales-point").forEach((point) => {
+        point.addEventListener("pointerenter", (event) => {
+          showTooltip(point, event.clientX, event.clientY);
+        });
+
+        point.addEventListener("pointermove", (event) => {
+          showTooltip(point, event.clientX, event.clientY);
+        });
+
+        point.addEventListener("pointerleave", hideTooltip);
+
+        point.addEventListener("focus", () => {
+          const pointPosition = point.getBoundingClientRect();
+
+          showTooltip(
+            point,
+            pointPosition.left + pointPosition.width / 2,
+            pointPosition.top,
+          );
+        });
+
+        point.addEventListener("blur", hideTooltip);
+      });
+    }
+
+    function formatExactCurrency(value) {
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(Number(value) || 0);
+    }
+
+    function renderServiceMixChart(series) {
+      const donut = getElementById("serviceDonut");
+      const legend = getElementById("serviceLegend");
+      legend.replaceChildren();
+
+      const total = (series || []).reduce((sum, item) => sum + item.value, 0);
+      getElementById("serviceTotal").textContent = formatCompactCurrency(total);
+
+      if (!series || !series.length || total <= 0) {
+        donut.style.background = "#e9edf1";
+        const empty = document.createElement("div");
+        empty.className = "empty-chart";
+        empty.textContent = "No service sales data.";
+        legend.appendChild(empty);
+        return;
+      }
+
+      let running = 0;
+      const segments = series.map((item, index) => {
+        const start = (running / total) * 100;
+        running += item.value;
+        const end = (running / total) * 100;
+        return `${CHART_COLORS[index % CHART_COLORS.length]} ${start}% ${end}%`;
+      });
+      donut.style.background = `conic-gradient(${segments.join(",")})`;
+
+      series.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "legend-row";
+
+        const dot = document.createElement("span");
+        dot.className = "legend-dot";
+        dot.style.background = CHART_COLORS[index % CHART_COLORS.length];
+
+        const label = document.createElement("span");
+        label.className = "legend-label";
+        label.textContent = item.label;
+        label.title = item.label;
+
+        const value = document.createElement("span");
+        value.className = "legend-value";
+        value.textContent = `${((item.value / total) * 100).toFixed(1)}%`;
+
+        row.append(dot, label, value);
+        legend.appendChild(row);
+      });
+    }
+
+    function renderHorizontalBars(hostId, series, formatter, showTarget) {
+      const host = getElementById(hostId);
+      host.replaceChildren();
+      if (!series || !series.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-chart";
+        empty.textContent = "No data for this selection.";
+        host.appendChild(empty);
+        return;
+      }
+
+      const maxValue = Math.max(1, ...series.map((item) => item.value));
+      series.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+
+        const head = document.createElement("div");
+        head.className = "bar-head";
+        const label = document.createElement("span");
+        label.className = "bar-label";
+        label.textContent = item.label;
+        label.title = item.label;
+        const value = document.createElement("span");
+        value.className = "bar-value";
+        value.textContent = formatter(item.value);
+        head.append(label, value);
+
+        const track = document.createElement("div");
+        track.className = "bar-track";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${Math.max(1.5, (item.value / maxValue) * 100)}%`;
+        track.appendChild(fill);
+
+        row.append(head, track);
+        if (showTarget) {
+          const note = document.createElement("div");
+          note.className = "bar-note";
+          note.textContent =
+            item.target > 0
+              ? `${formatPercent((item.value / item.target) * 100)} of target`
+              : "No target in selected rows";
+          row.appendChild(note);
+        }
+        host.appendChild(row);
+      });
+    }
+
+    function renderBranchPerformanceTable() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const searchQuery = getElementById("branchSearch")
+        .value.trim()
+        .toLowerCase();
+      const matchingBranches = dashboardState.data.branches.filter((branch) =>
+        branchMatchesSearch(branch, searchQuery),
+      );
+      const tableBody = getElementById("branchTableBody");
+
+      tableBody.replaceChildren();
+
+      matchingBranches.forEach((branch) => {
+        tableBody.appendChild(createBranchTableRow(branch));
+      });
+
+      updateBranchTableCount(matchingBranches.length);
+    }
+
+    function branchMatchesSearch(branch, searchQuery) {
+      if (!searchQuery) {
+        return true;
+      }
+
+      const normalizedBranchName = branch.branchName.toLowerCase();
+      const normalizedRegion = branch.region.toLowerCase();
+
+      return (
+        normalizedBranchName.includes(searchQuery) ||
+        normalizedRegion.includes(searchQuery)
+      );
+    }
+
+    function createBranchTableRow(branch) {
+      const tableRow = document.createElement("tr");
+
+      tableRow.appendChild(createBranchCell(branch));
+      tableRow.appendChild(createNumberCell(formatCurrency(branch.sales)));
+      tableRow.appendChild(
+        createNumberCell(
+          branch.target > 0 ? formatCurrency(branch.target) : "—",
+        ),
+      );
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.targetAchievement, "achievement"),
+      );
+      tableRow.appendChild(createNumberCell(formatCount(branch.transactions)));
+      tableRow.appendChild(
+        createNumberCell(formatCurrency(branch.averageTicket)),
+      );
+      tableRow.appendChild(createNumberCell(formatCurrency(branch.expenses)));
+      tableRow.appendChild(createBranchResultCell(branch));
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.tdcUtilization, "utilization"),
+      );
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.pdcUtilization, "utilization"),
+      );
+
+      return tableRow;
+    }
+
+    function createBranchResultCell(branch) {
+      const resultCell = createNumberCell(
+        formatCurrency(branch.salesLessDisbursements),
+      );
+      const resultClass =
+        branch.salesLessDisbursements >= 0 ? "positive" : "negative-text";
+
+      resultCell.classList.add(resultClass);
+
+      return resultCell;
+    }
+
+    function updateBranchTableCount(visibleBranchCount) {
+      const totalBranchCount = dashboardState.data.branches.length;
+
+      getElementById("tableCount").textContent =
+        `${visibleBranchCount} of ${totalBranchCount} branches shown`;
+    }
+
+    function createBranchCell(branch) {
+      const cell = document.createElement("td");
+      cell.className = "branch-cell";
+
+      const button = document.createElement("button");
+      button.className = "branch-link";
+      button.type = "button";
+      button.dataset.branchKey = branch.branchKey;
+      button.setAttribute(
+        "aria-label",
+        `View slot utilization for ${branch.branchName}`,
+      );
+
+      const label = document.createElement("span");
+      label.className = "branch-link-label";
+      const strong = document.createElement("strong");
+      strong.textContent = branch.branchName;
+      const span = document.createElement("span");
+      span.textContent = branch.region;
+      label.append(strong, span);
+
+      const arrow = document.createElement("span");
+      arrow.className = "branch-link-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+
+      button.append(label, arrow);
+      cell.appendChild(button);
+
+      return cell;
+    }
+
+    function createNumberCell(value) {
+      const cell = document.createElement("td");
+      cell.className = "number mono";
+      cell.textContent = value;
+      return cell;
+    }
+
+    function createMetricBadgeCell(value, type) {
+      const cell = document.createElement("td");
+      cell.className = "number";
+      cell.appendChild(createMetricBadge(value, type));
+
+      return cell;
+    }
+
+    function createMetricBadge(value, type) {
+      const badge = document.createElement("span");
+      badge.className = "metric-badge mono";
+
+      if (value == null) {
+        badge.textContent = "—";
+      } else {
+        badge.textContent = formatPercent(value);
+        badge.classList.add(getMetricBadgeClass(value, type));
+      }
+
+      return badge;
+    }
+
+    function getMetricBadgeClass(value, type) {
+      if (type === "achievement") {
+        if (value >= 100) {
+          return "good";
+        }
+
+        if (value >= 80) {
+          return "warn";
+        }
+
+        return "bad";
+      }
+
+      if (value >= 70) {
+        return "good";
+      }
+
+      if (value >= 35) {
+        return "warn";
+      }
+
+      return "bad";
+    }
+
+    function openBranchUtilizationDialog(branch, branchButton) {
+      const dialog = getElementById("branchUtilizationDialog");
+      const cards = getElementById("slotCourseCards");
+
+      dashboardState.lastFocusedBranchButton = branchButton;
+      dialog.classList.remove("slot-analytics-mode");
+      cards.classList.remove("analytics-mode");
+      renderBranchUtilizationDialog(branch);
+
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      resetSlotDialogViewport(dialog);
+    }
+
+    function resetSlotDialogViewport(dialog) {
+      const shell = dialog.querySelector(".slot-dialog-shell");
+      const tableWraps = dialog.querySelectorAll(
+        ".slot-analytics-table-wrap",
+      );
+
+      const resetPosition = () => {
+        if (shell) {
+          shell.scrollTop = 0;
+          shell.scrollLeft = 0;
+        }
+
+        tableWraps.forEach((tableWrap) => {
+          tableWrap.scrollLeft = 0;
+        });
+      };
+
+      resetPosition();
+      window.requestAnimationFrame(resetPosition);
+    }
+
+    function renderBranchUtilizationDialog(branch) {
+      const note = document.querySelector(
+        "#branchUtilizationDialog .slot-dialog-note",
+      );
+
+      getElementById("slotDialogTitle").textContent =
+        `${branch.branchName} slot utilization`;
+      getElementById("slotDialogMeta").textContent = [
+        branch.region,
+        `${formatFriendlyDate(
+          dashboardState.data.filtersApplied.startDate,
+        )} – ${formatFriendlyDate(
+          dashboardState.data.filtersApplied.endDate,
+        )}`,
+      ].join(" • ");
+
+      if (note) {
+        note.textContent =
+          "These figures come from the connected Sheet. Each course uses its own latest available slot record within the selected dates and compares it with that course’s prior available record.";
+      }
+
+      getElementById("slotCourseCards").replaceChildren(
+        createCourseUtilizationCard(branch, "TDC"),
+        createCourseUtilizationCard(branch, "PDC"),
+      );
+    }
+
+    function openSlotAnalyticsDialog(branch, branchButton) {
+      const dialog = getElementById("branchUtilizationDialog");
+      const cards = getElementById("slotCourseCards");
+
+      dashboardState.lastFocusedBranchButton = branchButton;
+      dialog.classList.add("slot-analytics-mode");
+      cards.classList.add("analytics-mode");
+      renderSlotAnalyticsDialog(branch);
+
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      resetSlotDialogViewport(dialog);
+    }
+
+    function renderSlotAnalyticsDialog(branch) {
+      const courseCode = dashboardState.slotCourse.toUpperCase();
+      const note = document.querySelector(
+        "#branchUtilizationDialog .slot-dialog-note",
+      );
+
+      getElementById("slotDialogTitle").textContent =
+        `${branch.branchName} · ${courseCode} analytics`;
+      getElementById("slotDialogMeta").textContent = [
+        branch.region,
+        `${formatFriendlyDate(
+          dashboardState.data.filtersApplied.startDate,
+        )} – ${formatFriendlyDate(
+          dashboardState.data.filtersApplied.endDate,
+        )}`,
+      ].join(" • ");
+
+      if (note) {
+        note.textContent =
+          `Detailed ${courseCode} weekly allocation, used slots, utilization, and encoded sales for the selected period. This detailed view is available only from the TDC/PDC tab.`;
+      }
+
+      getElementById("slotCourseCards").replaceChildren(
+        createSlotAnalyticsPanel(branch, courseCode),
+      );
+    }
+
+    function createSlotAnalyticsPanel(branch, courseCode) {
+      const analytics = calculateSlotAnalytics(branch);
+      const panel = document.createElement("section");
+
+      panel.className = "slot-analytics-panel";
+      panel.append(
+        createSlotAnalyticsSummary(
+          branch,
+          courseCode,
+          analytics,
+        ),
+        createSlotAnalyticsInsight(branch, analytics),
+        createSlotAnalyticsTable(analytics.history),
+        createSlotAnalyticsFooter(branch, analytics),
+      );
+
+      return panel;
+    }
+
+    function calculateSlotAnalytics(branch) {
+      const history = (branch.weeklyHistory || [])
+        .slice()
+        .sort(
+          (firstRow, secondRow) =>
+            firstRow.periodKey - secondRow.periodKey,
+        );
+      const usableRows = history.filter(
+        (row) => row.utilization != null,
+      );
+      const latestRow =
+        history.find(
+          (row) =>
+            row.periodKey === branch.latest.periodKey,
+        ) || history[history.length - 1] || null;
+      const previousRow = branch.previous
+        ? history.find(
+            (row) =>
+              row.periodKey === branch.previous.periodKey,
+          ) || null
+        : null;
+      const totalSales = history.reduce(
+        (sum, row) => sum + (Number(row.sales) || 0),
+        0,
+      );
+      const currentSales = latestRow
+        ? Number(latestRow.sales) || 0
+        : 0;
+      const previousSales = previousRow
+        ? Number(previousRow.sales) || 0
+        : null;
+      const salesChange =
+        previousSales == null
+          ? null
+          : currentSales - previousSales;
+      const salesChangePercent =
+        previousSales && previousSales !== 0
+          ? (salesChange / Math.abs(previousSales)) * 100
+          : null;
+      const peakRow = usableRows.length
+        ? usableRows.reduce((best, row) =>
+            row.utilization > best.utilization ? row : best,
+          )
+        : null;
+      const lowestRow = usableRows.length
+        ? usableRows.reduce((lowest, row) =>
+            row.utilization < lowest.utilization
+              ? row
+              : lowest,
+          )
+        : null;
+
+      return {
+        history,
+        latestRow,
+        previousRow,
+        totalSales,
+        currentSales,
+        previousSales,
+        salesChange,
+        salesChangePercent,
+        peakRow,
+        lowestRow,
+      };
+    }
+
+    function createSlotAnalyticsSummary(
+      branch,
+      courseCode,
+      analytics,
+    ) {
+      const section = document.createElement("div");
+      const heading = document.createElement("div");
+      const title = document.createElement("div");
+      const eyebrow = document.createElement("span");
+      const strong = document.createElement("strong");
+      const meta = document.createElement("small");
+      const trendPresentation = getTrendPresentation(
+        branch.trend.status,
+      );
+      const trendBadge = document.createElement("span");
+      const statistics = document.createElement("div");
+
+      section.className = "slot-analytics-summary";
+      heading.className = "slot-analytics-heading";
+      title.className = "slot-analytics-title";
+      eyebrow.textContent = `${courseCode} weekly capacity`;
+      strong.textContent = branch.branchName;
+      meta.textContent = branch.region;
+      title.append(eyebrow, strong, meta);
+
+      trendBadge.className =
+        `slot-trend-badge ${trendPresentation.className}`;
+      trendBadge.textContent =
+        `${trendPresentation.symbol} ${trendPresentation.label}`;
+      heading.append(title, trendBadge);
+
+      statistics.className = "slot-analytics-stat-grid";
+      statistics.append(
+        createAnalyticsStatistic(
+          "Current utilization",
+          branch.latest.utilization == null
+            ? "—"
+            : formatPercent(branch.latest.utilization),
+          branch.latest.periodLabel,
+        ),
+        createAnalyticsStatistic(
+          "Slots used",
+          branch.latest.allocated > 0
+            ? `${formatCount(branch.latest.used)} of ${formatCount(
+                branch.latest.allocated,
+              )}`
+            : "—",
+          "Latest usable slot record",
+        ),
+        createAnalyticsStatistic(
+          branch.latest.aboveAllocation > 0
+            ? "Above allocation"
+            : "Idle slots",
+          branch.latest.allocated == null
+            ? "—"
+            : formatCount(
+                branch.latest.aboveAllocation > 0
+                  ? branch.latest.aboveAllocation
+                  : branch.latest.idle,
+              ),
+          branch.latest.allocated == null
+            ? "No usable allocation record"
+            : branch.latest.aboveAllocation > 0
+              ? "Validate capacity and usage"
+              : "Unused in the latest record",
+        ),
+        createAnalyticsStatistic(
+          "Period average",
+          branch.periodAverage.utilization == null
+            ? "—"
+            : formatPercent(
+                branch.periodAverage.utilization,
+              ),
+          `${formatCount(
+            branch.periodAverage.reports,
+          )} weekly records`,
+        ),
+        createAnalyticsStatistic(
+          "Selected-period sales",
+          analytics.history.length
+            ? formatExactCurrency(analytics.totalSales)
+            : "—",
+          analytics.history.length
+            ? "Encoded sales in listed weeks"
+            : "No slot weeks available for comparison",
+        ),
+      );
+
+      section.append(heading, statistics);
+      return section;
+    }
+
+    function createAnalyticsStatistic(label, value, note) {
+      const card = document.createElement("div");
+      const labelElement = document.createElement("span");
+      const valueElement = document.createElement("strong");
+      const noteElement = document.createElement("small");
+
+      card.className = "slot-analytics-stat";
+      labelElement.textContent = label;
+      valueElement.className = "mono";
+      valueElement.textContent = value;
+      noteElement.textContent = note || "";
+      card.append(labelElement, valueElement, noteElement);
+      return card;
+    }
+
+    function createSlotAnalyticsInsight(branch, analytics) {
+      const container = document.createElement("div");
+      const trendPresentation = getTrendPresentation(
+        branch.trend.status,
+      );
+      const badge = document.createElement("span");
+      const text = document.createElement("p");
+      const action = document.createElement("strong");
+      const parts = [];
+
+      container.className =
+        `slot-analytics-insight ${trendPresentation.className}`;
+      badge.className =
+        `slot-trend-badge ${trendPresentation.className}`;
+      badge.textContent =
+        `${trendPresentation.symbol} ${trendPresentation.label}`;
+
+      if (branch.trend.changePercentagePoints == null) {
+        parts.push(
+          "No prior usable slot record is available for comparison.",
+        );
+      } else {
+        parts.push(
+          `Utilization changed by ${formatSignedPercentagePoints(
+            branch.trend.changePercentagePoints,
+          )} from ${branch.previous.periodLabel}.`,
+        );
+      }
+
+      if (analytics.salesChange != null) {
+        const percentText =
+          analytics.salesChangePercent == null
+            ? ""
+            : ` (${formatSignedPercent(
+                analytics.salesChangePercent,
+              )})`;
+
+        parts.push(
+          `Latest-week sales changed by ${formatSignedCurrency(
+            analytics.salesChange,
+          )}${percentText}.`,
+        );
+      }
+
+      text.textContent = parts.join(" ");
+      action.textContent =
+        `Suggested action: ${getSlotUtilizationAction(
+          branch.latest.utilization,
+          branch,
+        )}`;
+      container.append(badge, text, action);
+      return container;
+    }
+
+    function createSlotAnalyticsTable(history) {
+      const section = document.createElement("section");
+      const heading = document.createElement("div");
+      const title = document.createElement("h3");
+      const subtitle = document.createElement("span");
+      const wrap = document.createElement("div");
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const body = document.createElement("tbody");
+      const headRow = document.createElement("tr");
+
+      section.className = "slot-analytics-history";
+      heading.className = "slot-analytics-history-heading";
+      title.textContent = "Weekly performance history";
+      subtitle.textContent =
+        "Allocation, usage, utilization, and encoded sales";
+      heading.append(title, subtitle);
+
+      [
+        "Week",
+        "Used",
+        "Allocation",
+        "Idle",
+        "Utilization",
+        "Sales",
+      ].forEach((label) => {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        if (label !== "Week") {
+          cell.className = "number";
+        }
+        headRow.appendChild(cell);
+      });
+      head.appendChild(headRow);
+
+      history.forEach((row) => {
+        const tableRow = document.createElement("tr");
+        const utilizationLevel = getSlotUtilizationLevel(
+          row.utilization,
+        );
+
+        tableRow.append(
+          createAnalyticsTableCell(
+            getCompactWeekLabel(row),
+            false,
+            row.periodLabel,
+          ),
+          createAnalyticsTableCell(
+            row.used == null ? "—" : formatCount(row.used),
+            true,
+          ),
+          createAnalyticsTableCell(
+            row.allocated == null
+              ? "—"
+              : formatCount(row.allocated),
+            true,
+          ),
+          createAnalyticsTableCell(
+            row.idle == null ? "—" : formatCount(row.idle),
+            true,
+          ),
+          createAnalyticsUtilizationCell(
+            row.utilization,
+            utilizationLevel,
+          ),
+          createAnalyticsTableCell(
+            formatExactCurrency(row.sales),
+            true,
+          ),
+        );
+        body.appendChild(tableRow);
+      });
+
+      if (!history.length) {
+        const emptyRow = document.createElement("tr");
+        const emptyCell = document.createElement("td");
+        emptyCell.colSpan = 6;
+        emptyCell.className = "slot-analytics-empty";
+        emptyCell.textContent =
+          "No weekly slot history is available in this selection.";
+        emptyRow.appendChild(emptyCell);
+        body.appendChild(emptyRow);
+      }
+
+      table.append(head, body);
+      wrap.className = "slot-analytics-table-wrap";
+      wrap.appendChild(table);
+      section.append(heading, wrap);
+      return section;
+    }
+
+    function createAnalyticsTableCell(
+      value,
+      isNumber,
+      title,
+    ) {
+      const cell = document.createElement("td");
+
+      cell.textContent = value;
+      if (isNumber) {
+        cell.className = "number mono";
+      }
+      if (title) {
+        cell.title = title;
+      }
+      return cell;
+    }
+
+    function createAnalyticsUtilizationCell(value, level) {
+      const cell = document.createElement("td");
+      const badge = document.createElement("span");
+
+      cell.className = "number";
+      badge.className =
+        `slot-analytics-utilization mono ${level}`;
+      badge.textContent =
+        value == null ? "—" : formatPercent(value);
+      cell.appendChild(badge);
+      return cell;
+    }
+
+    function createSlotAnalyticsFooter(branch, analytics) {
+      const footer = document.createElement("div");
+      const peak = document.createElement("span");
+      const low = document.createElement("span");
+      const services = document.createElement("span");
+
+      footer.className = "slot-analytics-footer";
+      peak.textContent = analytics.peakRow
+        ? `Peak: ${getCompactWeekLabel(
+            analytics.peakRow,
+          )} at ${formatPercent(
+            analytics.peakRow.utilization,
+          )}`
+        : "Peak: no usable percentage";
+      low.textContent = analytics.lowestRow
+        ? `Lowest: ${getCompactWeekLabel(
+            analytics.lowestRow,
+          )} at ${formatPercent(
+            analytics.lowestRow.utilization,
+          )}`
+        : "Lowest: no usable percentage";
+      services.textContent = branch.serviceGroups?.length
+        ? `Service groups: ${branch.serviceGroups.join(", ")}`
+        : "Service groups: none identified";
+      footer.append(peak, low, services);
+      return footer;
+    }
+
+    function getCompactWeekLabel(row) {
+      const week = Number(row.periodKey) % 100;
+
+      return week > 0
+        ? `W${week}`
+        : row.periodLabel || "—";
+    }
+
+    function formatSignedCurrency(value) {
+      const numericValue = Number(value) || 0;
+      const sign = numericValue > 0 ? "+" : "";
+
+      return `${sign}${formatExactCurrency(numericValue)}`;
+    }
+
+    function formatSignedPercent(value) {
+      const numericValue = Number(value) || 0;
+      const sign = numericValue > 0 ? "+" : "";
+
+      return `${sign}${numericValue.toFixed(1)}%`;
+    }
+
+    function createCourseUtilizationCard(branch, courseCode) {
+      const capacity = getCourseCapacity(branch, courseCode);
+      const card = document.createElement("article");
+      card.className = "slot-course-card";
+
+      const header = document.createElement("div");
+      header.className = "slot-course-header";
+
+      const title = document.createElement("div");
+      const label = document.createElement("span");
+      label.className = "slot-course-label";
+      label.textContent = courseCode;
+      const subtitle = document.createElement("span");
+      subtitle.className = "slot-course-subtitle";
+      const courseName =
+        courseCode === "TDC"
+          ? "Theoretical driving course"
+          : "Practical driving course";
+      subtitle.textContent = capacity.currentPeriod
+        ? `${courseName} · Current: ${capacity.currentPeriod}`
+        : courseName;
+      title.append(label, subtitle);
+
+      header.append(
+        title,
+        createMetricBadge(capacity.utilization, "utilization"),
+      );
+      card.appendChild(header);
+
+      if (!capacity.hasData) {
+        card.appendChild(createNoCapacityDataMessage());
+        return card;
+      }
+
+      card.append(
+        createCapacityTrend(capacity),
+        createCapacityProgress(capacity),
+        createCapacityStatistics(capacity),
+      );
+
+      return card;
+    }
+
+    function getCourseCapacity(branch, courseCode) {
+      const propertyPrefix = courseCode.toLowerCase();
+      const allocated = branch[`${propertyPrefix}Allocated`];
+      const used = branch[`${propertyPrefix}Used`];
+      const utilization = branch[`${propertyPrefix}Utilization`];
+      const trend = branch[`${propertyPrefix}Trend`];
+      const hasData = allocated != null && used != null;
+
+      return {
+        allocated,
+        used,
+        utilization,
+        trend,
+        currentPeriod:
+          branch[`${propertyPrefix}CapacityPeriod`] ||
+          branch.capacityPeriod,
+        previousPeriod:
+          branch[`${propertyPrefix}PreviousCapacityPeriod`] ||
+          branch.previousCapacityPeriod,
+        idle: hasData ? Math.max(allocated - used, 0) : null,
+        aboveAllocation: hasData ? Math.max(used - allocated, 0) : null,
+        hasData,
+      };
+    }
+
+    function createNoCapacityDataMessage() {
+      const message = document.createElement("div");
+      message.className = "slot-no-data";
+      message.textContent =
+        "No slot allocation and usage were reported for this course.";
+      return message;
+    }
+
+    function createCapacityTrend(capacity) {
+      const trend = capacity.trend || {
+        status: "INSUFFICIENT_DATA",
+        changePercentagePoints: null,
+      };
+      const presentation = getTrendPresentation(trend.status);
+
+      const container = document.createElement("div");
+      container.className = "slot-trend";
+
+      const badge = document.createElement("span");
+      badge.className =
+        `slot-trend-badge ${presentation.className}`;
+      badge.textContent =
+        `${presentation.symbol} ${presentation.label}`;
+
+      const comparison = document.createElement("span");
+      comparison.className = "slot-trend-comparison mono";
+      comparison.textContent = createTrendComparisonText(
+        trend,
+        capacity.previousPeriod,
+      );
+
+      container.append(badge, comparison);
+      return container;
+    }
+
+    function getTrendPresentation(status) {
+      const presentations = {
+        GROWING: {
+          className: "growing",
+          symbol: "↑",
+          label: "Increasing",
+        },
+        STABLE: {
+          className: "stable",
+          symbol: "→",
+          label: "Stable",
+        },
+        DECLINING: {
+          className: "declining",
+          symbol: "↓",
+          label: "Declining",
+        },
+        INSUFFICIENT_DATA: {
+          className: "insufficient",
+          symbol: "—",
+          label: "No trend yet",
+        },
+      };
+
+      return (
+        presentations[status] ||
+        presentations.INSUFFICIENT_DATA
+      );
+    }
+
+    function createTrendComparisonText(trend, previousPeriod) {
+      if (trend.changePercentagePoints == null) {
+        return "No prior slot record found for comparison";
+      }
+
+      const comparisonPeriod =
+        previousPeriod || "the prior slot record";
+
+      return (
+        `${formatSignedPercentagePoints(
+          trend.changePercentagePoints,
+        )} vs ${comparisonPeriod}`
+      );
+    }
+
+    function formatSignedPercentagePoints(value) {
+      const numericValue = Number(value);
+      const sign = numericValue > 0 ? "+" : "";
+      const formattedValue = new Intl.NumberFormat("en-PH", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(numericValue);
+
+      return `${sign}${formattedValue} pp`;
+    }
+
+    function createCapacityProgress(capacity) {
+      const utilization = Number(capacity.utilization) || 0;
+      const progressTrack = document.createElement("div");
+      progressTrack.className = "slot-progress-track";
+      progressTrack.setAttribute("role", "progressbar");
+      progressTrack.setAttribute("aria-valuemin", "0");
+      progressTrack.setAttribute(
+        "aria-valuemax",
+        String(Math.max(100, utilization)),
+      );
+      progressTrack.setAttribute("aria-valuenow", String(utilization));
+      progressTrack.setAttribute(
+        "aria-valuetext",
+        `${formatPercent(utilization)} utilized`,
+      );
+
+      const progressFill = document.createElement("div");
+      progressFill.className = "slot-progress-fill";
+      progressFill.style.width =
+        `${Math.min(Math.max(utilization, 0), 100)}%`;
+      progressFill.classList.toggle(
+        "over-capacity",
+        capacity.aboveAllocation > 0,
+      );
+      progressTrack.appendChild(progressFill);
+
+      return progressTrack;
+    }
+
+    function createCapacityStatistics(capacity) {
+      const statistics = document.createElement("div");
+      statistics.className = "slot-stat-grid";
+      const isAboveAllocation = capacity.aboveAllocation > 0;
+
+      statistics.append(
+        createSlotStatistic("Allocated", capacity.allocated),
+        createSlotStatistic("Used", capacity.used),
+        createSlotStatistic(
+          isAboveAllocation ? "Above allocation" : "Idle",
+          isAboveAllocation ? capacity.aboveAllocation : capacity.idle,
+        ),
+      );
+
+      return statistics;
+    }
+
+    function createSlotStatistic(label, value) {
+      const statistic = document.createElement("div");
+      statistic.className = "slot-stat";
+      const valueElement = document.createElement("strong");
+      valueElement.className = "mono";
+      valueElement.textContent = formatSlotCount(value);
+      const labelElement = document.createElement("span");
+      labelElement.textContent = label;
+      statistic.append(valueElement, labelElement);
+      return statistic;
+    }
+
+    function formatSlotCount(value) {
+      if (value == null) {
+        return "—";
+      }
+
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 1,
+      }).format(Number(value));
+    }
+
+    function closeBranchUtilizationDialog() {
+      const dialog = getElementById("branchUtilizationDialog");
+
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+
+    function restoreBranchButtonFocus() {
+      const branchButton = dashboardState.lastFocusedBranchButton;
+
+      dashboardState.lastFocusedBranchButton = null;
+
+      if (branchButton && document.body.contains(branchButton)) {
+        branchButton.focus();
+      }
+    }
+
+    function formatCurrency(value) {
+      const number = Number(value) || 0;
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        maximumFractionDigits: 0,
+      }).format(number);
+    }
+
+    function formatCompactCurrency(value) {
+      const number = Number(value) || 0;
+      return (
+        "₱" +
+        new Intl.NumberFormat("en", {
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(number)
+      );
+    }
+
+    function formatCount(value) {
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    }
+
+    function formatPercent(value) {
+      return `${(Number(value) || 0).toFixed(1)}%`;
+    }
+
+    function formatFriendlyDate(value) {
+      const date = parseIsoDate(value);
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+    }
+
+    function parseIsoDate(value) {
+      const [year, month, day] = String(value).split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    function toIsoDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function calculateNiceMaximum(value) {
+      const exponent = Math.floor(Math.log10(value));
+      const fraction = value / Math.pow(10, exponent);
+      const niceFraction = calculateNiceFraction(fraction);
+
+      return niceFraction * Math.pow(10, exponent);
+    }
+
+    function calculateNiceFraction(fraction) {
+      if (fraction <= 1) {
+        return 1;
+      }
+
+      if (fraction <= 2) {
+        return 2;
+      }
+
+      if (fraction <= 5) {
+        return 5;
+      }
+
+      return 10;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function buildPreviewData() {
+      const branches = [
+        createPreviewBranch(
+          "TL Test Central",
+          "Region 6",
+          640000,
+          550000,
+          310,
+          88000,
+          74,
+          58,
+        ),
+        createPreviewBranch(
+          "TL Test Riverside",
+          "Region 7",
+          515000,
+          500000,
+          246,
+          72000,
+          83,
+          67,
+        ),
+        createPreviewBranch(
+          "TL Test North",
+          "Region 6",
+          438000,
+          470000,
+          221,
+          69000,
+          62,
+          49,
+        ),
+        createPreviewBranch(
+          "TL Test South",
+          "Region 11",
+          382000,
+          450000,
+          198,
+          81000,
+          55,
+          43,
+        ),
+        createPreviewBranch(
+          "TL Test Island",
+          "NIR",
+          295000,
+          360000,
+          147,
+          61000,
+          46,
+          null,
+        ),
+        createPreviewBranch(
+          "TL Test East",
+          "Region 7",
+          248000,
+          320000,
+          123,
+          57000,
+          31,
+          28,
+        ),
+      ];
+      const sales = branches.reduce((sum, item) => sum + item.sales, 0);
+      const target = branches.reduce((sum, item) => sum + item.target, 0);
+      const transactions = branches.reduce(
+        (sum, item) => sum + item.transactions,
+        0,
+      );
+      const expenses = branches.reduce((sum, item) => sum + item.expenses, 0);
+
+      return {
+        meta: {
+          spreadsheetName: "Converted workbook — preview",
+          readOnly: true,
+          refreshedAt: "2026-07-30 13:00:00",
+          dataAsOf: "2026-07-29",
+          trendBucket: "DAY",
+        },
+        availableDateRange: { min: "2026-06-01", max: "2026-07-29" },
+        filtersApplied: {
+          startDate: "2026-07-01",
+          endDate: "2026-07-29",
+          region: "ALL",
+          branch: "ALL",
+        },
+        options: {
+          regions: ["NIR", "Region 6", "Region 7", "Region 11"],
+          branches: branches.map((item) => ({
+            branchKey: item.branchKey,
+            branchName: item.branchName,
+            region: item.region,
+          })),
+        },
+        kpis: {
+          sales,
+          target,
+          targetAchievement: (sales / target) * 100,
+          transactions,
+          averageTicket: sales / transactions,
+          customers: 1090,
+          expenses,
+          salesLessDisbursements: sales - expenses,
+          tdcUtilization: 62.8,
+          tdcTrend: createPreviewUtilizationTrend(62.8, 7.5),
+          pdcUtilization: 51.7,
+          pdcTrend: createPreviewUtilizationTrend(51.7, -6.2),
+        },
+        charts: {
+          salesTrend: [
+            ["Jul 1", 162000],
+            ["Jul 5", 221000],
+            ["Jul 9", 197000],
+            ["Jul 13", 284000],
+            ["Jul 17", 239000],
+            ["Jul 21", 326000],
+            ["Jul 25", 301000],
+            ["Jul 29", 388000],
+          ].map((item, index) => ({
+            key: `2026-07-${String(index * 4 + 1).padStart(2, "0")}`,
+            label: item[0],
+            sales: item[1],
+            transactions: 0,
+          })),
+          serviceMix: [
+            { label: "PDC", value: 1275000 },
+            { label: "TDC", value: 812000 },
+            { label: "DL", value: 216000 },
+            { label: "CDE", value: 132000 },
+            { label: "Other", value: 83000 },
+          ],
+          customerMix: [
+            { label: "Walk-In", value: 716 },
+            { label: "Referral", value: 218 },
+            { label: "Company / Corporate", value: 107 },
+            { label: "Other", value: 49 },
+          ],
+          expenseMix: [
+            { label: "Operating Expenses", value: 218000 },
+            { label: "Cost of Service", value: 155000 },
+            { label: "Bank & Other Charges", value: 56000 },
+          ],
+          topBranches: branches.map((item) => ({
+            label: item.branchName,
+            value: item.sales,
+            target: item.target,
+          })),
+        },
+        capacity: createPreviewCapacityView(branches),
+        branches,
+        health: {
+          salesRowsMatched: 684,
+          branchesMatched: branches.length,
+        },
+      };
+    }
+
+    function createPreviewBranch(
+      branchName,
+      region,
+      sales,
+      target,
+      transactions,
+      expenses,
+      tdcUtilization,
+      pdcUtilization,
+    ) {
+      return {
+        branchKey: branchName.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+        branchName,
+        region,
+        sales,
+        target,
+        targetAchievement: (sales / target) * 100,
+        transactions,
+        averageTicket: sales / transactions,
+        customers: transactions,
+        expenses,
+        salesLessDisbursements: sales - expenses,
+        tdcAllocated: tdcUtilization == null ? null : 100,
+        tdcUsed: tdcUtilization,
+        tdcUtilization,
+        pdcAllocated: pdcUtilization == null ? null : 100,
+        pdcUsed: pdcUtilization,
+        pdcUtilization,
+        tdcTrend: createPreviewUtilizationTrend(
+          tdcUtilization,
+          6.4,
+        ),
+        pdcTrend: createPreviewUtilizationTrend(
+          pdcUtilization,
+          -7.2,
+        ),
+        capacityPeriod: "Week 30, 2026",
+        previousCapacityPeriod: "Week 29, 2026",
+        tdcCapacityPeriod: "Week 30, 2026",
+        tdcPreviousCapacityPeriod: "Week 29, 2026",
+        pdcCapacityPeriod: "Week 30, 2026",
+        pdcPreviousCapacityPeriod: "Week 29, 2026",
+      };
+    }
+
+    function createPreviewCapacityView(branches) {
+      return {
+        basis: "LATEST_AVAILABLE_PER_BRANCH",
+        tdc: createPreviewCapacityCourse(
+          branches,
+          "tdc",
+          "TDC",
+        ),
+        pdc: createPreviewCapacityCourse(
+          branches,
+          "pdc",
+          "PDC",
+        ),
+      };
+    }
+
+    function createPreviewCapacityCourse(
+      branches,
+      prefix,
+      courseCode,
+    ) {
+      const courseBranches = branches
+        .filter((branch) => branch[`${prefix}Allocated`] != null)
+        .map((branch) => {
+          const allocated = branch[`${prefix}Allocated`];
+          const used = branch[`${prefix}Used`];
+          const trend = branch[`${prefix}Trend`];
+          const previousUtilization =
+            trend.previousUtilization;
+          const previousUsed =
+            (allocated * previousUtilization) / 100;
+          const periodUsed = used + previousUsed;
+          const periodAllocated = allocated * 2;
+
+          return {
+            branchKey: branch.branchKey,
+            branchName: branch.branchName,
+            region: branch.region,
+            latest: {
+              periodKey: 202630,
+              periodLabel: "Week 30, 2026",
+              allocated,
+              used,
+              idle: Math.max(allocated - used, 0),
+              aboveAllocation: Math.max(used - allocated, 0),
+              utilization: branch[`${prefix}Utilization`],
+            },
+            previous: {
+              periodKey: 202629,
+              periodLabel: "Week 29, 2026",
+              allocated,
+              used: previousUsed,
+              idle: Math.max(allocated - previousUsed, 0),
+              aboveAllocation: Math.max(previousUsed - allocated, 0),
+              utilization: previousUtilization,
+            },
+            trend,
+            periodAverage: {
+              allocated: periodAllocated,
+              used: periodUsed,
+              idle: Math.max(
+                periodAllocated - periodUsed,
+                0,
+              ),
+              utilization:
+                (periodUsed / periodAllocated) * 100,
+              reports: 2,
+            },
+          };
+        });
+
+      const latestAllocated = courseBranches.reduce(
+        (sum, branch) => sum + branch.latest.allocated,
+        0,
+      );
+      const latestUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.latest.used,
+        0,
+      );
+      const previousAllocated = courseBranches.reduce(
+        (sum, branch) => sum + branch.previous.allocated,
+        0,
+      );
+      const previousUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.previous.used,
+        0,
+      );
+      const periodAllocated = courseBranches.reduce(
+        (sum, branch) =>
+          sum + branch.periodAverage.allocated,
+        0,
+      );
+      const periodUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.periodAverage.used,
+        0,
+      );
+      const currentUtilization =
+        latestAllocated > 0
+          ? (latestUsed / latestAllocated) * 100
+          : null;
+      const previousUtilization =
+        previousAllocated > 0
+          ? (previousUsed / previousAllocated) * 100
+          : null;
+      const movementCounts = {
+        growing: courseBranches.filter(
+          (branch) => branch.trend.status === "GROWING",
+        ).length,
+        stable: courseBranches.filter(
+          (branch) => branch.trend.status === "STABLE",
+        ).length,
+        declining: courseBranches.filter(
+          (branch) => branch.trend.status === "DECLINING",
+        ).length,
+      };
+
+      return {
+        courseCode,
+        summary: {
+          latest: {
+            allocated: latestAllocated,
+            used: latestUsed,
+            idle: Math.max(
+              latestAllocated - latestUsed,
+              0,
+            ),
+            utilization: currentUtilization,
+          },
+          periodAverage: {
+            allocated: periodAllocated,
+            used: periodUsed,
+            idle: Math.max(
+              periodAllocated - periodUsed,
+              0,
+            ),
+            utilization:
+              periodAllocated > 0
+                ? (periodUsed / periodAllocated) * 100
+                : null,
+            reports: courseBranches.length * 2,
+          },
+          trend: createPreviewUtilizationTrend(
+            currentUtilization,
+            currentUtilization - previousUtilization,
+          ),
+          coverage: {
+            branchesWithData: courseBranches.length,
+            branchesWithUtilization: courseBranches.length,
+            comparableBranches: courseBranches.length,
+          },
+          movementCounts,
+        },
+        branches: courseBranches,
+      };
+    }
+
+    function createPreviewUtilizationTrend(
+      currentUtilization,
+      changePercentagePoints,
+    ) {
+      if (currentUtilization == null) {
+        return {
+          status: "INSUFFICIENT_DATA",
+          changePercentagePoints: null,
+          previousUtilization: null,
+        };
+      }
+
+      let status = "STABLE";
+
+      if (changePercentagePoints > 5) {
+        status = "GROWING";
+      } else if (changePercentagePoints < -5) {
+        status = "DECLINING";
+      }
+
+      return {
+        status,
+        changePercentagePoints,
+        previousUtilization:
+          currentUtilization - changePercentagePoints,
+      };
+    }
+  })();
+</script>
