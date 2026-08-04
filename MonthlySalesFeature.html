@@ -1,0 +1,1057 @@
+<style>
+  .monthly-sales-view {
+    display: grid;
+    gap: 16px;
+  }
+
+  .monthly-sales-hero,
+  .monthly-sales-panel {
+    background: #ffffff;
+    border: 1px solid #e7dfcf;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(11, 31, 58, 0.06);
+  }
+
+  .monthly-sales-hero {
+    padding: 18px;
+  }
+
+  .monthly-sales-heading {
+    align-items: flex-end;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .monthly-sales-heading h2 {
+    color: #0b1f3a;
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+
+  .monthly-sales-heading p {
+    color: #6f7d90;
+    margin: 0;
+  }
+
+  .monthly-sales-controls {
+    align-items: end;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(190px, 260px) auto 1fr;
+  }
+
+  .monthly-sales-field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .monthly-sales-field label {
+    color: #516176;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .monthly-sales-field input {
+    background: #fff;
+    border: 1px solid #d8dfe8;
+    border-radius: 10px;
+    color: #0b1f3a;
+    font: inherit;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .monthly-sales-note {
+    color: #6f7d90;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .monthly-sales-summary {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 16px;
+  }
+
+  .monthly-sales-kpi {
+    background: #f8fafc;
+    border: 1px solid #e7ecf2;
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .monthly-sales-kpi span {
+    color: #6f7d90;
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    margin-bottom: 7px;
+    text-transform: uppercase;
+  }
+
+  .monthly-sales-kpi strong {
+    color: #0b1f3a;
+    font-size: 22px;
+  }
+
+  .monthly-sales-panel {
+    overflow: hidden;
+  }
+
+  .monthly-sales-toolbar {
+    align-items: center;
+    border-bottom: 1px solid #ece6db;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 16px 18px;
+  }
+
+  .monthly-sales-toolbar h3 {
+    color: #0b1f3a;
+    font-size: 17px;
+    margin: 0 0 3px;
+  }
+
+  .monthly-sales-toolbar p {
+    color: #6f7d90;
+    font-size: 12px;
+    margin: 0;
+  }
+
+  .monthly-sales-table-wrap {
+    overflow-x: auto;
+  }
+
+  .monthly-sales-table {
+    border-collapse: collapse;
+    min-width: 900px;
+    width: 100%;
+  }
+
+  .monthly-sales-table th {
+    background: #0b1f3a;
+    color: #ffffff;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 11px 12px;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .monthly-sales-table th.number,
+  .monthly-sales-table td.number {
+    text-align: right;
+  }
+
+  .monthly-sales-table td {
+    border-bottom: 1px solid #edf0f4;
+    color: #29394f;
+    padding: 10px 12px;
+    vertical-align: middle;
+  }
+
+  .monthly-sales-region-row td {
+    background: #e9eef5;
+    color: #0b1f3a;
+    font-weight: 800;
+  }
+
+  .monthly-sales-branch-row td:first-child {
+    padding-left: 38px;
+  }
+
+  .monthly-sales-total-row td {
+    background: #dce8d7;
+    border-top: 2px solid #b8cdb0;
+    color: #0b1f3a;
+    font-weight: 900;
+  }
+
+  .monthly-sales-region-toggle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    gap: 8px;
+    padding: 0;
+  }
+
+  .monthly-sales-caret {
+    align-items: center;
+    background: #0b1f3a;
+    border-radius: 5px;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 12px;
+    height: 20px;
+    justify-content: center;
+    width: 20px;
+  }
+
+  .monthly-sales-achievement {
+    border-radius: 999px;
+    display: inline-block;
+    font-weight: 800;
+    min-width: 68px;
+    padding: 4px 8px;
+    text-align: center;
+  }
+
+  .monthly-sales-achievement.good {
+    background: #dff3e7;
+    color: #116b42;
+  }
+
+  .monthly-sales-achievement.watch {
+    background: #fff0c9;
+    color: #8a5a00;
+  }
+
+  .monthly-sales-achievement.low {
+    background: #fde4e7;
+    color: #a62938;
+  }
+
+  .monthly-sales-empty,
+  .monthly-sales-loading {
+    color: #6f7d90;
+    padding: 28px 18px;
+    text-align: center;
+  }
+
+  .monthly-sales-error {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 10px;
+    color: #9f1239;
+    margin: 14px 18px;
+    padding: 12px 14px;
+  }
+
+  @media (max-width: 900px) {
+    .monthly-sales-heading,
+    .monthly-sales-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .monthly-sales-controls {
+      grid-template-columns: 1fr;
+    }
+
+    .monthly-sales-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .monthly-sales-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+    "use strict";
+
+    const monthlySalesState = {
+      active: false,
+      data: null,
+      expandedRegions: new Set(),
+      lastRequestKey: "",
+      loading: false,
+    };
+
+    initializeMonthlySalesFeature();
+
+    function initializeMonthlySalesFeature() {
+      removeRegionalScorecard();
+      addThisMonthPreset();
+      addMonthlySalesTab();
+      addMonthlySalesView();
+      registerMonthlySalesEvents();
+      syncMonthlyPickerFromDashboard();
+    }
+
+
+    /**
+     * Removes the old Regional Scorecard because Monthly Sales now provides
+     * the same regional totals with expandable branch detail.
+     */
+    function removeRegionalScorecard() {
+      const regionalTab = document.getElementById("regionalTab");
+      const regionalView = document.getElementById("regionalScorecardView");
+
+      if (regionalTab) {
+        regionalTab.remove();
+      }
+
+      if (regionalView) {
+        regionalView.remove();
+      }
+    }
+
+    function addThisMonthPreset() {
+      const presetContainer = document.querySelector(".presets");
+
+      if (!presetContainer || document.getElementById("thisMonthPreset")) {
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.className = "preset";
+      button.id = "thisMonthPreset";
+      button.type = "button";
+      button.dataset.monthlyPreset = "month";
+      button.textContent = "This month";
+      presetContainer.insertBefore(button, presetContainer.firstElementChild);
+    }
+
+    function addMonthlySalesTab() {
+      const tabs = document.querySelector(".dashboard-view-tabs");
+
+      if (!tabs || document.getElementById("monthlySalesTab")) {
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.className = "dashboard-view-tab";
+      button.id = "monthlySalesTab";
+      button.type = "button";
+      button.role = "tab";
+      button.dataset.dashboardView = "monthlySalesView";
+      button.setAttribute("aria-selected", "false");
+      button.setAttribute("aria-controls", "monthlySalesView");
+      button.textContent = "Monthly Sales";
+
+      tabs.appendChild(button);
+    }
+
+    function addMonthlySalesView() {
+      const dashboard = document.getElementById("dashboard");
+
+      if (!dashboard || document.getElementById("monthlySalesView")) {
+        return;
+      }
+
+      const view = document.createElement("main");
+      view.className = "monthly-sales-view hidden";
+      view.id = "monthlySalesView";
+      view.role = "tabpanel";
+      view.setAttribute("aria-labelledby", "monthlySalesTab");
+      view.innerHTML = `
+        <section class="monthly-sales-hero">
+          <div class="monthly-sales-heading">
+            <div>
+              <h2>Monthly Sales Detail</h2>
+              <p>Monthly target, actual sales and achievement by region and branch.</p>
+            </div>
+            <div class="monthly-sales-note" id="monthlySalesPeriodNote">
+              Select a month to load the detailed report.
+            </div>
+          </div>
+          <div class="monthly-sales-controls">
+            <div class="monthly-sales-field">
+              <label for="monthlySalesMonth">Reporting month</label>
+              <input id="monthlySalesMonth" type="month">
+            </div>
+            <button class="button primary" id="loadMonthlySalesButton" type="button">
+              Load month
+            </button>
+            <div class="monthly-sales-note">
+              The month picker controls the reporting dates in this tab. Region and branch selections above are also applied. A partial current month compares actual sales-to-date against the full monthly target.
+            </div>
+          </div>
+          <div class="monthly-sales-summary">
+            <article class="monthly-sales-kpi">
+              <span>Actual sales</span>
+              <strong class="mono" id="monthlySalesActual">—</strong>
+            </article>
+            <article class="monthly-sales-kpi">
+              <span>Monthly target</span>
+              <strong class="mono" id="monthlySalesTarget">—</strong>
+            </article>
+            <article class="monthly-sales-kpi">
+              <span>Target achievement</span>
+              <strong class="mono" id="monthlySalesAchievement">—</strong>
+            </article>
+            <article class="monthly-sales-kpi">
+              <span>Transactions</span>
+              <strong class="mono" id="monthlySalesTransactions">—</strong>
+            </article>
+          </div>
+        </section>
+        <section class="monthly-sales-panel">
+          <div class="monthly-sales-toolbar">
+            <div>
+              <h3 id="monthlySalesTableTitle">Monthly sales by region</h3>
+              <p id="monthlySalesTableSubtitle">Region rows can be expanded to show branches.</p>
+            </div>
+            <button class="button" id="monthlyExpandAllButton" type="button">
+              Collapse all
+            </button>
+          </div>
+          <div id="monthlySalesError" class="monthly-sales-error hidden"></div>
+          <div class="monthly-sales-table-wrap">
+            <table class="monthly-sales-table">
+              <thead>
+                <tr>
+                  <th>Region / Branch</th>
+                  <th class="number">Monthly Target</th>
+                  <th class="number">Actual Sales</th>
+                  <th class="number">Achievement</th>
+                  <th class="number">Variance</th>
+                  <th class="number">Transactions</th>
+                </tr>
+              </thead>
+              <tbody id="monthlySalesTableBody">
+                <tr><td colspan="6" class="monthly-sales-empty">Open the Monthly Sales tab to load data.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `;
+
+      dashboard.appendChild(view);
+    }
+
+    function registerMonthlySalesEvents() {
+      const monthlyTab = document.getElementById("monthlySalesTab");
+      const loadButton = document.getElementById("loadMonthlySalesButton");
+      const monthInput = document.getElementById("monthlySalesMonth");
+      const tableBody = document.getElementById("monthlySalesTableBody");
+      const expandButton = document.getElementById("monthlyExpandAllButton");
+      const thisMonthButton = document.getElementById("thisMonthPreset");
+      const applyButton = document.getElementById("applyButton");
+      const refreshButton = document.getElementById("refreshButton");
+
+      if (monthlyTab) {
+        monthlyTab.addEventListener("click", activateMonthlySalesView);
+      }
+
+      document.querySelectorAll("[data-dashboard-view]").forEach((tab) => {
+        if (tab.id !== "monthlySalesTab") {
+          tab.addEventListener("click", deactivateMonthlySalesView);
+        }
+      });
+
+      if (loadButton) {
+        loadButton.addEventListener("click", () => loadMonthlySales(false));
+      }
+
+      if (monthInput) {
+        monthInput.addEventListener("change", () => loadMonthlySales(false));
+      }
+
+      if (tableBody) {
+        tableBody.addEventListener("click", handleMonthlyTableClick);
+      }
+
+      if (expandButton) {
+        expandButton.addEventListener("click", toggleAllMonthlyRegions);
+      }
+
+      if (thisMonthButton) {
+        thisMonthButton.addEventListener("click", applyThisMonthPreset);
+      }
+
+      // When Monthly Sales is active, reuse the main Apply/Refresh buttons for
+      // this report instead of sending a second overview request.
+      if (applyButton) {
+        applyButton.addEventListener(
+          "click",
+          (event) => handleMainActionForMonthly(event, false),
+          true,
+        );
+      }
+
+      if (refreshButton) {
+        refreshButton.addEventListener(
+          "click",
+          (event) => handleMainActionForMonthly(event, true),
+          true,
+        );
+      }
+    }
+
+    function activateMonthlySalesView() {
+      monthlySalesState.active = true;
+      [
+        "overviewView",
+        "slotUtilizationView",
+      ].forEach((viewId) => {
+        const view = document.getElementById(viewId);
+        if (view) view.classList.add("hidden");
+      });
+
+      const monthlyView = document.getElementById("monthlySalesView");
+      if (monthlyView) monthlyView.classList.remove("hidden");
+
+      document.querySelectorAll(".dashboard-view-tab").forEach((tab) => {
+        const active = tab.id === "monthlySalesTab";
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      syncMonthlyPickerFromDashboard();
+      loadMonthlySales(false);
+    }
+
+    function deactivateMonthlySalesView() {
+      monthlySalesState.active = false;
+      const monthlyView = document.getElementById("monthlySalesView");
+      if (monthlyView) monthlyView.classList.add("hidden");
+    }
+
+    function handleMainActionForMonthly(event, forceRefresh) {
+      if (!monthlySalesState.active) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      loadMonthlySales(forceRefresh);
+    }
+
+    function applyThisMonthPreset() {
+      const startDate = document.getElementById("startDate");
+      const endDate = document.getElementById("endDate");
+      const monthInput = document.getElementById("monthlySalesMonth");
+      const applyButton = document.getElementById("applyButton");
+
+      if (!startDate || !endDate || !endDate.value) {
+        return;
+      }
+
+      const latestAvailableDate = endDate.max || endDate.value;
+      const latestMonth = latestAvailableDate.slice(0, 7);
+      const monthStart = `${latestMonth}-01`;
+      const availableMinimum = startDate.min || monthStart;
+
+      startDate.value = monthStart < availableMinimum
+        ? availableMinimum
+        : monthStart;
+      endDate.value = latestAvailableDate;
+
+      if (monthInput) {
+        monthInput.value = latestMonth;
+      }
+
+      if (applyButton) {
+        applyButton.click();
+      }
+    }
+
+    function syncMonthlyPickerFromDashboard() {
+      const monthInput = document.getElementById("monthlySalesMonth");
+      const startDate = document.getElementById("startDate");
+      const endDate = document.getElementById("endDate");
+
+      if (!monthInput || !endDate) {
+        return;
+      }
+
+      if (startDate && startDate.min) {
+        monthInput.min = startDate.min.slice(0, 7);
+      }
+
+      if (endDate.max) {
+        monthInput.max = endDate.max.slice(0, 7);
+      }
+
+      if (!monthInput.value && endDate.value) {
+        monthInput.value = endDate.value.slice(0, 7);
+      }
+    }
+
+    function loadMonthlySales(forceRefresh) {
+      if (monthlySalesState.loading) {
+        return;
+      }
+
+      const filters = buildMonthlyFilters(forceRefresh);
+
+      if (!filters) {
+        showMonthlyError("Select a valid reporting month.");
+        return;
+      }
+
+      const requestKey = JSON.stringify(filters);
+      if (
+        !forceRefresh &&
+        monthlySalesState.data &&
+        monthlySalesState.lastRequestKey === requestKey
+      ) {
+        renderMonthlySales(monthlySalesState.data);
+        return;
+      }
+
+      setMonthlyLoading(true);
+      showMonthlyError("");
+
+      if (
+        typeof google === "undefined" ||
+        !google.script ||
+        !google.script.run
+      ) {
+        setMonthlyLoading(false);
+        showMonthlyError(
+          "Monthly Sales requires the deployed Google Apps Script web app.",
+        );
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler((data) => {
+          monthlySalesState.data = data;
+          monthlySalesState.lastRequestKey = requestKey;
+          monthlySalesState.expandedRegions.clear();
+          setMonthlyLoading(false);
+          renderMonthlySales(data);
+        })
+        .withFailureHandler((error) => {
+          setMonthlyLoading(false);
+          showMonthlyError(getMonthlyErrorMessage(error));
+        })
+        .getDashboardData(filters);
+    }
+
+    function buildMonthlyFilters(forceRefresh) {
+      const monthInput = document.getElementById("monthlySalesMonth");
+      const startDate = document.getElementById("startDate");
+      const endDate = document.getElementById("endDate");
+      const regionFilter = document.getElementById("regionFilter");
+      const branchFilter = document.getElementById("branchFilter");
+      const monthValue = monthInput && monthInput.value;
+
+      if (!/^\d{4}-\d{2}$/.test(monthValue || "")) {
+        return null;
+      }
+
+      const [year, month] = monthValue.split("-").map(Number);
+      const monthStart = `${monthValue}-01`;
+      const monthEnd = toMonthlyIsoDate(
+        new Date(Date.UTC(year, month, 0)),
+      );
+      const availableMin = startDate && startDate.min;
+      const availableMax = endDate && endDate.max;
+      const selectedStart = availableMin && monthStart < availableMin
+        ? availableMin
+        : monthStart;
+      const selectedEnd = availableMax && monthEnd > availableMax
+        ? availableMax
+        : monthEnd;
+
+      if (selectedStart > selectedEnd) {
+        return null;
+      }
+
+      return {
+        startDate: selectedStart,
+        endDate: selectedEnd,
+        region: regionFilter ? regionFilter.value || "ALL" : "ALL",
+        branch: branchFilter ? branchFilter.value || "ALL" : "ALL",
+        forceRefresh: forceRefresh === true,
+      };
+    }
+
+    function setMonthlyLoading(isLoading) {
+      monthlySalesState.loading = isLoading;
+      const loadButton = document.getElementById("loadMonthlySalesButton");
+      const tableBody = document.getElementById("monthlySalesTableBody");
+
+      if (loadButton) {
+        loadButton.disabled = isLoading;
+        loadButton.textContent = isLoading ? "Loading…" : "Load month";
+      }
+
+      if (isLoading && tableBody) {
+        tableBody.innerHTML =
+          '<tr><td colspan="6" class="monthly-sales-loading">Loading monthly sales detail…</td></tr>';
+      }
+    }
+
+    function renderMonthlySales(data) {
+      if (!data) {
+        return;
+      }
+
+      const monthInput = document.getElementById("monthlySalesMonth");
+      const applied = data.filtersApplied || {};
+      const range = data.availableDateRange || {};
+      const kpis = data.kpis || {};
+      const selectedMonth = applied.endDate
+        ? applied.endDate.slice(0, 7)
+        : monthInput && monthInput.value;
+
+      if (monthInput) {
+        if (range.min) monthInput.min = range.min.slice(0, 7);
+        if (range.max) monthInput.max = range.max.slice(0, 7);
+        if (selectedMonth) monthInput.value = selectedMonth;
+      }
+
+      setMonthlyText("monthlySalesActual", formatMonthlyCurrency(kpis.sales));
+      setMonthlyText("monthlySalesTarget", formatMonthlyCurrency(kpis.target));
+      setMonthlyText(
+        "monthlySalesAchievement",
+        kpis.targetAchievement == null
+          ? "—"
+          : formatMonthlyPercent(kpis.targetAchievement),
+      );
+      setMonthlyText(
+        "monthlySalesTransactions",
+        formatMonthlyCount(kpis.transactions),
+      );
+
+      const monthLabel = formatMonthLabel(selectedMonth);
+      const periodNote = document.getElementById("monthlySalesPeriodNote");
+      const title = document.getElementById("monthlySalesTableTitle");
+      const subtitle = document.getElementById("monthlySalesTableSubtitle");
+
+      if (periodNote) {
+        periodNote.textContent = applied.startDate && applied.endDate
+          ? `${monthLabel} · Actual data ${formatMonthlyFriendlyDate(applied.startDate)} to ${formatMonthlyFriendlyDate(applied.endDate)}`
+          : monthLabel;
+      }
+
+      if (title) {
+        title.textContent = `${monthLabel} sales by region`;
+      }
+
+      if (subtitle) {
+        const regionText = applied.region && applied.region !== "ALL"
+          ? applied.region
+          : "All regions";
+        subtitle.textContent =
+          `${regionText} · ${formatMonthlyCount((data.health || {}).salesRowsMatched || 0)} matched sales rows`;
+      }
+
+      const groupedData = buildMonthlyRegionGroups(data);
+
+      if (!monthlySalesState.expandedRegions.size) {
+        groupedData.regions.forEach((region) => {
+          monthlySalesState.expandedRegions.add(region.name);
+        });
+      }
+
+      renderMonthlySalesRows(groupedData);
+    }
+
+    function buildMonthlyRegionGroups(data) {
+      const applied = data.filtersApplied || {};
+      const selectedRegion = applied.region || "ALL";
+      const selectedBranch = applied.branch || "ALL";
+      const groups = new Map();
+      const visibleBranches = (data.branches || []).filter((branch) => {
+        const matchesRegion =
+          selectedRegion === "ALL" || branch.region === selectedRegion;
+        const matchesBranch =
+          selectedBranch === "ALL" || branch.branchKey === selectedBranch;
+        const hasBusiness =
+          Number(branch.sales || 0) !== 0 ||
+          Number(branch.target || 0) !== 0;
+
+        return matchesRegion && matchesBranch && (hasBusiness || selectedBranch !== "ALL");
+      });
+
+      visibleBranches.forEach((branch) => {
+        const regionName = branch.region || "Unspecified";
+        let group = groups.get(regionName);
+
+        if (!group) {
+          group = {
+            name: regionName,
+            branches: [],
+            target: 0,
+            sales: 0,
+            transactions: 0,
+          };
+          groups.set(regionName, group);
+        }
+
+        group.branches.push(branch);
+        group.target += Number(branch.target || 0);
+        group.sales += Number(branch.sales || 0);
+        group.transactions += Number(branch.transactions || 0);
+      });
+
+      const regions = Array.from(groups.values());
+      regions.forEach((region) => {
+        region.branches.sort((a, b) =>
+          String(a.branchName || "").localeCompare(String(b.branchName || "")),
+        );
+      });
+      regions.sort(compareMonthlyRegions);
+
+      const totals = regions.reduce(
+        (saved, region) => {
+          saved.target += region.target;
+          saved.sales += region.sales;
+          saved.transactions += region.transactions;
+          return saved;
+        },
+        { target: 0, sales: 0, transactions: 0 },
+      );
+
+      return { regions, totals };
+    }
+
+    function compareMonthlyRegions(first, second) {
+      const firstNumber = Number(first.name);
+      const secondNumber = Number(second.name);
+      const firstIsNumber = Number.isFinite(firstNumber);
+      const secondIsNumber = Number.isFinite(secondNumber);
+
+      if (firstIsNumber && secondIsNumber) {
+        return firstNumber - secondNumber;
+      }
+      if (firstIsNumber) return -1;
+      if (secondIsNumber) return 1;
+      return String(first.name).localeCompare(String(second.name));
+    }
+
+    function renderMonthlySalesRows(groupedData) {
+      const tableBody = document.getElementById("monthlySalesTableBody");
+      const expandButton = document.getElementById("monthlyExpandAllButton");
+
+      if (!tableBody) {
+        return;
+      }
+
+      if (!groupedData.regions.length) {
+        tableBody.innerHTML =
+          '<tr><td colspan="6" class="monthly-sales-empty">No sales or monthly target was found for this selection.</td></tr>';
+        if (expandButton) expandButton.disabled = true;
+        return;
+      }
+
+      if (expandButton) {
+        expandButton.disabled = false;
+        const allExpanded = groupedData.regions.every((region) =>
+          monthlySalesState.expandedRegions.has(region.name),
+        );
+        expandButton.textContent = allExpanded ? "Collapse all" : "Expand all";
+      }
+
+      const rows = [];
+
+      groupedData.regions.forEach((region) => {
+        const expanded = monthlySalesState.expandedRegions.has(region.name);
+        rows.push(createMonthlyRegionRow(region, expanded));
+
+        if (expanded) {
+          region.branches.forEach((branch) => {
+            rows.push(createMonthlyBranchRow(branch));
+          });
+        }
+      });
+
+      rows.push(createMonthlyTotalRow(groupedData.totals));
+      tableBody.innerHTML = rows.join("");
+    }
+
+    function createMonthlyRegionRow(region, expanded) {
+      const achievement = calculateMonthlyAchievement(region.sales, region.target);
+      const variance = region.sales - region.target;
+      return `
+        <tr class="monthly-sales-region-row">
+          <td>
+            <button class="monthly-sales-region-toggle" type="button" data-monthly-region="${escapeMonthlyHtml(region.name)}" aria-expanded="${expanded}">
+              <span class="monthly-sales-caret">${expanded ? "−" : "+"}</span>
+              ${escapeMonthlyHtml(region.name)} Total
+            </button>
+          </td>
+          <td class="number mono">${formatMonthlyCurrency(region.target)}</td>
+          <td class="number mono">${formatMonthlyCurrency(region.sales)}</td>
+          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
+          <td class="number mono">${formatMonthlySignedCurrency(variance)}</td>
+          <td class="number mono">${formatMonthlyCount(region.transactions)}</td>
+        </tr>
+      `;
+    }
+
+    function createMonthlyBranchRow(branch) {
+      const target = Number(branch.target || 0);
+      const sales = Number(branch.sales || 0);
+      const achievement = branch.targetAchievement == null
+        ? calculateMonthlyAchievement(sales, target)
+        : Number(branch.targetAchievement);
+      return `
+        <tr class="monthly-sales-branch-row">
+          <td>${escapeMonthlyHtml(branch.branchName || branch.branchKey || "Unspecified")}</td>
+          <td class="number mono">${formatMonthlyCurrency(target)}</td>
+          <td class="number mono">${formatMonthlyCurrency(sales)}</td>
+          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
+          <td class="number mono">${formatMonthlySignedCurrency(sales - target)}</td>
+          <td class="number mono">${formatMonthlyCount(branch.transactions)}</td>
+        </tr>
+      `;
+    }
+
+    function createMonthlyTotalRow(totals) {
+      const achievement = calculateMonthlyAchievement(totals.sales, totals.target);
+      return `
+        <tr class="monthly-sales-total-row">
+          <td>Grand Total</td>
+          <td class="number mono">${formatMonthlyCurrency(totals.target)}</td>
+          <td class="number mono">${formatMonthlyCurrency(totals.sales)}</td>
+          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
+          <td class="number mono">${formatMonthlySignedCurrency(totals.sales - totals.target)}</td>
+          <td class="number mono">${formatMonthlyCount(totals.transactions)}</td>
+        </tr>
+      `;
+    }
+
+    function handleMonthlyTableClick(event) {
+      const button = event.target.closest("[data-monthly-region]");
+
+      if (!button || !monthlySalesState.data) {
+        return;
+      }
+
+      const regionName = button.dataset.monthlyRegion;
+      if (monthlySalesState.expandedRegions.has(regionName)) {
+        monthlySalesState.expandedRegions.delete(regionName);
+      } else {
+        monthlySalesState.expandedRegions.add(regionName);
+      }
+
+      renderMonthlySalesRows(buildMonthlyRegionGroups(monthlySalesState.data));
+    }
+
+    function toggleAllMonthlyRegions() {
+      if (!monthlySalesState.data) {
+        return;
+      }
+
+      const groupedData = buildMonthlyRegionGroups(monthlySalesState.data);
+      const allExpanded = groupedData.regions.every((region) =>
+        monthlySalesState.expandedRegions.has(region.name),
+      );
+
+      monthlySalesState.expandedRegions.clear();
+      if (!allExpanded) {
+        groupedData.regions.forEach((region) => {
+          monthlySalesState.expandedRegions.add(region.name);
+        });
+      }
+
+      renderMonthlySalesRows(groupedData);
+    }
+
+    function calculateMonthlyAchievement(sales, target) {
+      return target > 0 ? (sales / target) * 100 : null;
+    }
+
+    function formatMonthlyAchievementBadge(value) {
+      if (value == null || !Number.isFinite(Number(value))) {
+        return '<span class="monthly-sales-achievement low">—</span>';
+      }
+
+      const numericValue = Number(value);
+      const level = numericValue >= 100
+        ? "good"
+        : numericValue >= 80
+          ? "watch"
+          : "low";
+      return `<span class="monthly-sales-achievement ${level}">${formatMonthlyPercent(numericValue)}</span>`;
+    }
+
+    function formatMonthlyCurrency(value) {
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        maximumFractionDigits: 0,
+      }).format(Number(value || 0));
+    }
+
+    function formatMonthlySignedCurrency(value) {
+      const numericValue = Number(value || 0);
+      const absolute = formatMonthlyCurrency(Math.abs(numericValue));
+      return numericValue < 0 ? `−${absolute}` : absolute;
+    }
+
+    function formatMonthlyPercent(value) {
+      return `${Number(value || 0).toLocaleString("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}%`;
+    }
+
+    function formatMonthlyCount(value) {
+      return Number(value || 0).toLocaleString("en-PH", {
+        maximumFractionDigits: 0,
+      });
+    }
+
+    function formatMonthLabel(monthValue) {
+      if (!/^\d{4}-\d{2}$/.test(monthValue || "")) {
+        return "Selected month";
+      }
+
+      const [year, month] = monthValue.split("-").map(Number);
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }
+
+    function formatMonthlyFriendlyDate(isoDate) {
+      if (!isoDate) return "—";
+      const [year, month, day] = isoDate.split("-").map(Number);
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, month - 1, day)));
+    }
+
+    function toMonthlyIsoDate(date) {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function setMonthlyText(elementId, value) {
+      const element = document.getElementById(elementId);
+      if (element) element.textContent = value;
+    }
+
+    function showMonthlyError(message) {
+      const error = document.getElementById("monthlySalesError");
+      if (!error) return;
+      error.textContent = message || "";
+      error.classList.toggle("hidden", !message);
+    }
+
+    function getMonthlyErrorMessage(error) {
+      if (!error) return "Unable to load monthly sales data.";
+      if (typeof error === "string") return error;
+      return error.message || "Unable to load monthly sales data.";
+    }
+
+    function escapeMonthlyHtml(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  })();
+</script>
