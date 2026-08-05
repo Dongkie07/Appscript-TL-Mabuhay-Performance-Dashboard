@@ -534,6 +534,10 @@
       monthlyRequestVersion: 0,
       monthlyLoadingKey: "",
       supportLoading: false,
+      loadedFilterKey: "",
+      inFlightFilterKey: "",
+      renderingSupport: false,
+      idleHandle: null,
     };
 
     if (document.readyState === "loading") {
@@ -550,7 +554,11 @@
       addMonthlySalesView();
       addSalesTrendsView();
       observeDashboardRefreshes();
-      scheduleExecutiveRefresh(450);
+      /*
+       * The base dashboard performs the first server request. Executive data
+       * is requested only after that render changes the KPI, preventing two
+       * expensive Apps Script calls from racing during page startup.
+       */
     }
 
     function removeRegionalScorecard() {
@@ -785,6 +793,14 @@
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
+
+      if (
+        !executiveState.latestSupport &&
+        !executiveState.supportLoading &&
+        !isBaseDashboardStillLoading()
+      ) {
+        scheduleExecutiveRefresh(0, true);
+      }
 
       renderSelectedExecutiveTrend();
     }
@@ -1104,7 +1120,12 @@
     }
 
     function mainRequestWillPreloadSelectedMonth() {
-      if (!executiveState.supportLoading) return false;
+      if (
+        !executiveState.supportLoading &&
+        !isBaseDashboardStillLoading()
+      ) {
+        return false;
+      }
 
       const selectedMonth =
         document.getElementById("executiveMonthPicker")?.value || "";
@@ -1115,6 +1136,13 @@
         /^\d{4}-\d{2}$/.test(selectedMonth) &&
         selectedMonth === endMonth
       );
+    }
+
+    function isBaseDashboardStillLoading() {
+      const salesValue = document.getElementById("kpiSales");
+      const text = String(salesValue?.textContent || "").trim();
+
+      return !/\d/.test(text);
     }
 
     function loadSelectedMonthSupport(forceRefresh) {
@@ -1435,7 +1463,19 @@
       if (!salesValue || executiveState.observer) return;
 
       executiveState.observer = new MutationObserver(() => {
-        scheduleExecutiveRefresh(250);
+        if (executiveState.renderingSupport) return;
+
+        const filterKey = getExecutiveFilterKey(readExecutiveFilters());
+
+        if (
+          !filterKey ||
+          filterKey === executiveState.loadedFilterKey ||
+          filterKey === executiveState.inFlightFilterKey
+        ) {
+          return;
+        }
+
+        scheduleExecutiveRefresh(80);
       });
       executiveState.observer.observe(salesValue, {
         childList: true,
@@ -1443,42 +1483,85 @@
         subtree: true,
       });
 
-      document.getElementById("applyButton")?.addEventListener("click", () => {
-        scheduleExecutiveRefresh(700);
-      });
       document.getElementById("refreshButton")?.addEventListener("click", () => {
         executiveState.monthlyCache = Object.create(null);
         executiveState.monthlyLoadingKey = "";
         executiveState.monthlyRequestVersion += 1;
-        scheduleExecutiveRefresh(700);
+        executiveState.loadedFilterKey = "";
+        executiveState.inFlightFilterKey = "";
       });
     }
 
-    function scheduleExecutiveRefresh(delay) {
+    function scheduleExecutiveRefresh(delay, urgent) {
       window.clearTimeout(executiveState.refreshTimer);
-      executiveState.refreshTimer = window.setTimeout(
-        refreshExecutiveSales,
-        Math.max(0, Number(delay) || 0),
-      );
+      executiveState.refreshTimer = null;
+
+      if (
+        executiveState.idleHandle !== null &&
+        typeof window.cancelIdleCallback === "function"
+      ) {
+        window.cancelIdleCallback(executiveState.idleHandle);
+      }
+      executiveState.idleHandle = null;
+
+      executiveState.refreshTimer = window.setTimeout(() => {
+        executiveState.refreshTimer = null;
+
+        if (
+          urgent !== true &&
+          typeof window.requestIdleCallback === "function"
+        ) {
+          executiveState.idleHandle = window.requestIdleCallback(
+            () => {
+              executiveState.idleHandle = null;
+              refreshExecutiveSales();
+            },
+            { timeout: 1200 },
+          );
+          return;
+        }
+
+        refreshExecutiveSales();
+      }, Math.max(0, Number(delay) || 0));
     }
 
     function refreshExecutiveSales() {
       if (!isAppsScriptRuntime()) return;
 
+      const filters = readExecutiveFilters();
+      const filterKey = getExecutiveFilterKey(filters);
+
+      if (!filterKey) return;
+
+      if (
+        filterKey === executiveState.loadedFilterKey &&
+        executiveState.latestSupport
+      ) {
+        renderExecutiveSupport(executiveState.latestSupport);
+        return;
+      }
+
+      if (filterKey === executiveState.inFlightFilterKey) return;
+
       const requestVersion = executiveState.requestVersion + 1;
       executiveState.requestVersion = requestVersion;
       executiveState.supportLoading = true;
-      const filters = readExecutiveFilters();
+      executiveState.inFlightFilterKey = filterKey;
 
       google.script.run
         .withSuccessHandler((supportData) => {
           if (requestVersion !== executiveState.requestVersion) return;
+
           executiveState.supportLoading = false;
+          executiveState.inFlightFilterKey = "";
+          executiveState.loadedFilterKey = filterKey;
           renderExecutiveSupport(supportData);
         })
         .withFailureHandler((error) => {
           if (requestVersion !== executiveState.requestVersion) return;
+
           executiveState.supportLoading = false;
+          executiveState.inFlightFilterKey = "";
           console.warn(
             "Executive sales support could not be loaded:",
             error?.message || error,
@@ -1487,11 +1570,28 @@
         .getExecutiveSalesSupport(filters);
     }
 
+    function getExecutiveFilterKey(filters) {
+      const safeFilters = filters || {};
+
+      if (!safeFilters.startDate || !safeFilters.endDate) return "";
+
+      return [
+        safeFilters.startDate,
+        safeFilters.endDate,
+        safeFilters.region || "ALL",
+        safeFilters.branch || "ALL",
+      ].join("|");
+    }
+
 
     function renderExecutiveSupport(supportData) {
       if (!supportData) return;
 
+      executiveState.renderingSupport = true;
       executiveState.latestSupport = supportData;
+      executiveState.loadedFilterKey = getExecutiveFilterKey(
+        supportData.filtersApplied || readExecutiveFilters(),
+      );
       primeMonthlyCacheFromSupport(supportData);
       const reconciliation = supportData.reconciliation || {};
       const kpis = supportData.kpis || {};
@@ -1534,7 +1634,8 @@
 
       if (cacheNote) {
         cacheNote.textContent =
-          supportData.cacheStatus === "HIT"
+          supportData.cacheStatus === "HIT" ||
+          supportData.cacheStatus === "MEMORY"
             ? "All trend views ready · cached"
             : "All trend views loaded together";
       }
@@ -1569,6 +1670,8 @@
         document.getElementById("monthlySalesView")?.classList.add("hidden");
         document.getElementById("salesTrendsView")?.classList.remove("hidden");
       }
+
+      executiveState.renderingSupport = false;
     }
 
 

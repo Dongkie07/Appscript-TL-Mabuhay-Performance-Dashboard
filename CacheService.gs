@@ -1,3 +1,99 @@
+
+/**
+ * Opportunistic in-memory L1 caches.
+ *
+ * Apps Script may reuse a warm V8 instance for several executions. These
+ * objects are never treated as authoritative; they only avoid repeatedly
+ * reading and JSON-parsing the same CacheService chunks when the instance is
+ * reused or when one server request asks for the same sources more than once.
+ */
+var DASHBOARD_MEMORY_SOURCE_CACHE_ = null;
+var DASHBOARD_MEMORY_RESULT_CACHE_ = Object.create(null);
+var DASHBOARD_MEMORY_RESULT_ORDER_ = [];
+
+function dashboardMemoryTtlMs_(seconds) {
+  return Math.max(1, Number(seconds) || 1) * 1000;
+}
+
+function readDashboardMemorySource_(cacheKey) {
+  const saved = DASHBOARD_MEMORY_SOURCE_CACHE_;
+
+  if (
+    !saved ||
+    saved.cacheKey !== cacheKey ||
+    Date.now() - saved.savedAtMs >=
+      dashboardMemoryTtlMs_(DASHBOARD_CONFIG.SOURCE_CACHE_SECONDS)
+  ) {
+    return null;
+  }
+
+  return {
+    sources: saved.sources,
+    cacheStatus: 'HIT',
+    cachedAt: new Date(saved.cachedAtMs)
+  };
+}
+
+function writeDashboardMemorySource_(cacheKey, sourceResult) {
+  if (!sourceResult || !sourceResult.sources) return;
+
+  const cachedAt = sourceResult.cachedAt instanceof Date
+    ? sourceResult.cachedAt
+    : new Date(sourceResult.cachedAt || Date.now());
+
+  DASHBOARD_MEMORY_SOURCE_CACHE_ = {
+    cacheKey: cacheKey,
+    sources: sourceResult.sources,
+    cachedAtMs: cachedAt.getTime(),
+    savedAtMs: Date.now()
+  };
+}
+
+function clearDashboardMemoryCaches_() {
+  DASHBOARD_MEMORY_SOURCE_CACHE_ = null;
+  DASHBOARD_MEMORY_RESULT_CACHE_ = Object.create(null);
+  DASHBOARD_MEMORY_RESULT_ORDER_ = [];
+}
+
+function readDashboardMemoryResult_(baseKey) {
+  const saved = DASHBOARD_MEMORY_RESULT_CACHE_[baseKey];
+
+  if (
+    !saved ||
+    Date.now() - saved.savedAtMs >=
+      dashboardMemoryTtlMs_(DASHBOARD_CONFIG.RESULT_CACHE_SECONDS)
+  ) {
+    if (saved) delete DASHBOARD_MEMORY_RESULT_CACHE_[baseKey];
+    return null;
+  }
+
+  try {
+    return JSON.parse(saved.serialized);
+  } catch (error) {
+    delete DASHBOARD_MEMORY_RESULT_CACHE_[baseKey];
+    return null;
+  }
+}
+
+function writeDashboardMemoryResult_(baseKey, serialized) {
+  DASHBOARD_MEMORY_RESULT_CACHE_[baseKey] = {
+    serialized: serialized,
+    savedAtMs: Date.now()
+  };
+  DASHBOARD_MEMORY_RESULT_ORDER_ =
+    DASHBOARD_MEMORY_RESULT_ORDER_.filter(function keepOtherKey(key) {
+      return key !== baseKey;
+    });
+  DASHBOARD_MEMORY_RESULT_ORDER_.push(baseKey);
+
+  const maximumEntries = 12;
+
+  while (DASHBOARD_MEMORY_RESULT_ORDER_.length > maximumEntries) {
+    const oldestKey = DASHBOARD_MEMORY_RESULT_ORDER_.shift();
+    delete DASHBOARD_MEMORY_RESULT_CACHE_[oldestKey];
+  }
+}
+
 /**
  * Chunked read-only source cache.
  *
@@ -10,6 +106,8 @@ function getDashboardSourcesCached_(spreadsheet, forceRefresh) {
   const cacheKey = createDashboardSourceCacheKey_(spreadsheet);
 
   if (forceRefresh) {
+    clearDashboardMemoryCaches_();
+
     try {
       clearDashboardResultCaches_(spreadsheet);
     } catch (cacheError) {
@@ -17,24 +115,60 @@ function getDashboardSourcesCached_(spreadsheet, forceRefresh) {
         'Dashboard result cache clear failed: ' + cacheError
       );
     }
-  }
+  } else {
+    const memoryResult = readDashboardMemorySource_(cacheKey);
+    if (memoryResult) return memoryResult;
 
-  if (!forceRefresh) {
     const cachedResult = readDashboardSourceCache_(cache, cacheKey);
-    if (cachedResult) return cachedResult;
+
+    if (cachedResult) {
+      writeDashboardMemorySource_(cacheKey, cachedResult);
+      return cachedResult;
+    }
   }
 
   const lock = LockService.getScriptLock();
-  const lockWaitMs = Math.min(
-    DASHBOARD_CONFIG.CACHE_LOCK_TIMEOUT_MS || 8000,
-    8000
+  const lockWaitMs = Math.max(
+    1000,
+    Math.min(
+      DASHBOARD_CONFIG.CACHE_LOCK_TIMEOUT_MS || 12000,
+      30000
+    )
   );
   const hasLock = lock.tryLock(lockWaitMs);
 
   try {
+    /*
+     * Another execution may have populated the shared cache while this
+     * execution was waiting. Re-check before touching Sheets.
+     */
     if (!forceRefresh) {
+      const memoryAfterLock = readDashboardMemorySource_(cacheKey);
+      if (memoryAfterLock) return memoryAfterLock;
+
       const cachedAfterLock = readDashboardSourceCache_(cache, cacheKey);
-      if (cachedAfterLock) return cachedAfterLock;
+
+      if (cachedAfterLock) {
+        writeDashboardMemorySource_(cacheKey, cachedAfterLock);
+        return cachedAfterLock;
+      }
+    }
+
+    /*
+     * If the lock could not be acquired, briefly give the cache-building
+     * execution a chance to finish. This avoids a cold-cache stampede where
+     * several viewers all read the workbook at the same time.
+     */
+    if (!hasLock && !forceRefresh) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        Utilities.sleep(250);
+        const sharedResult = readDashboardSourceCache_(cache, cacheKey);
+
+        if (sharedResult) {
+          writeDashboardMemorySource_(cacheKey, sharedResult);
+          return sharedResult;
+        }
+      }
     }
 
     const sources = readDashboardSources_(spreadsheet);
@@ -53,11 +187,14 @@ function getDashboardSourcesCached_(spreadsheet, forceRefresh) {
       cacheStatus = 'BYPASSED';
     }
 
-    return {
+    const result = {
       sources: sources,
       cacheStatus: cacheStatus,
       cachedAt: cachedAt
     };
+
+    writeDashboardMemorySource_(cacheKey, result);
+    return result;
   } finally {
     if (hasLock) lock.releaseLock();
   }
@@ -180,6 +317,7 @@ function deserializeDashboardSources_(serialized) {
 
 function clearDashboardSourceCache_(spreadsheet) {
   const cache = getDashboardCache_();
+  clearDashboardMemoryCaches_();
 
   try {
     clearDashboardResultCaches_(spreadsheet);
@@ -234,6 +372,12 @@ function readDashboardResultCache_(
     filters,
     resultType
   );
+  const memoryResult = readDashboardMemoryResult_(baseKey);
+
+  if (memoryResult) {
+    return memoryResult;
+  }
+
   const manifestText = cache.get(baseKey + '_manifest');
 
   if (!manifestText) {
@@ -275,7 +419,9 @@ function readDashboardResultCache_(
   }
 
   try {
-    return JSON.parse(serialized);
+    const parsed = JSON.parse(serialized);
+    writeDashboardMemoryResult_(baseKey, serialized);
+    return parsed;
   } catch (error) {
     clearDashboardCacheKeys_(
       cache,
@@ -301,6 +447,7 @@ function writeDashboardResultCache_(
     resultType
   );
   const serialized = JSON.stringify(response);
+  writeDashboardMemoryResult_(baseKey, serialized);
   const chunkSize = DASHBOARD_CONFIG.CACHE_CHUNK_CHARACTERS;
   const chunks = [];
 
@@ -432,6 +579,9 @@ function registerDashboardResultCacheKey_(
 }
 
 function clearDashboardResultCaches_(spreadsheet) {
+  DASHBOARD_MEMORY_RESULT_CACHE_ = Object.create(null);
+  DASHBOARD_MEMORY_RESULT_ORDER_ = [];
+
   const cache = getDashboardCache_();
   const indexKey = createDashboardResultIndexKey_(spreadsheet);
   const savedIndex = cache.get(indexKey);
