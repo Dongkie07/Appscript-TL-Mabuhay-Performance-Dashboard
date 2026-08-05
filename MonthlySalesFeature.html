@@ -530,6 +530,10 @@
       monthlyActive: false,
       trendsActive: false,
       latestSupport: null,
+      monthlyCache: Object.create(null),
+      monthlyRequestVersion: 0,
+      monthlyLoadingKey: "",
+      supportLoading: false,
     };
 
     if (document.readyState === "loading") {
@@ -933,7 +937,7 @@
       strip.innerHTML = `
         <article class="executive-reconciliation-card rule">
           <span>Reporting rule</span>
-          <strong>Reported sales follow DlySLSTrd: NON and REPRINT are excluded.</strong>
+          <strong>Sales Trends only follows DlySLSTrd: NON and REPRINT are excluded there.</strong>
         </article>
         <article class="executive-reconciliation-card excluded">
           <span>NON receipts</span>
@@ -970,7 +974,6 @@
       tab.textContent = "Monthly Sales";
       tab.addEventListener("click", () => {
         showMonthlySalesView(true);
-        applySelectedMonthToDashboard();
       });
       tabs.appendChild(tab);
 
@@ -984,7 +987,7 @@
           <div>
             <div class="eyebrow">Executive monthly performance</div>
             <h2>Monthly Sales Detail</h2>
-            <p>Reported service sales, direct monthly targets, and average branch achievement.</p>
+            <p>All encoded collections, direct monthly targets, and average branch achievement.</p>
           </div>
           <label class="executive-month-field">
             <span>Reporting month</span>
@@ -993,9 +996,9 @@
         </section>
         <section class="executive-monthly-kpis">
           <article class="executive-monthly-kpi">
-            <span>Reported service sales</span>
+            <span>Encoded collections</span>
             <strong id="monthlyReportedSales">—</strong>
-            <small>Matches DlySLSTrd; NON and REPRINT excluded</small>
+            <small>Includes NON and REPRINT</small>
           </article>
           <article class="executive-monthly-kpi">
             <span>Official actual collections</span>
@@ -1057,66 +1060,234 @@
       });
 
       syncMonthPicker();
-      if (supportMatchesSelectedMonth(executiveState.latestSupport)) {
-        renderMonthlySales(executiveState.latestSupport);
-      } else {
-        const host = document.getElementById("monthlyRegionGroups");
-        if (host) {
-          host.innerHTML =
-            '<div class="empty-chart">Loading the selected month…</div>';
-        }
+
+      const cachedSupport = getCachedSelectedMonthSupport();
+
+      if (cachedSupport) {
+        renderMonthlySales(cachedSupport);
+        return;
       }
+
+      if (mainRequestWillPreloadSelectedMonth()) {
+        showMonthlyLoading("Preparing monthly detail…");
+        return;
+      }
+
+      showMonthlyLoading("Loading the selected month…");
+      loadSelectedMonthSupport(false);
     }
 
     function supportMatchesSelectedMonth(supportData) {
-      const selectedMonth =
-        document.getElementById("executiveMonthPicker")?.value || "";
-      const applied = supportData?.filtersApplied || {};
+      const selectedKey = getSelectedMonthCacheKey();
+      const supportKey = getSupportMonthCacheKey(supportData);
 
-      return Boolean(
-        /^\d{4}-\d{2}$/.test(selectedMonth) &&
-        String(applied.startDate || "").slice(0, 7) === selectedMonth &&
-        String(applied.endDate || "").slice(0, 7) === selectedMonth
-      );
+      return Boolean(selectedKey && supportKey === selectedKey);
     }
 
     function handleMonthlyPickerChange() {
       executiveState.monthlyActive = true;
-      applySelectedMonthToDashboard();
+
+      const cachedSupport = getCachedSelectedMonthSupport();
+
+      if (cachedSupport) {
+        renderMonthlySales(cachedSupport);
+        return;
+      }
+
+      if (mainRequestWillPreloadSelectedMonth()) {
+        showMonthlyLoading("Preparing monthly detail…");
+        return;
+      }
+
+      showMonthlyLoading("Loading the selected month…");
+      loadSelectedMonthSupport(false);
     }
 
-    function applySelectedMonthToDashboard() {
-      const picker = document.getElementById("executiveMonthPicker");
-      const value = picker?.value || "";
+    function mainRequestWillPreloadSelectedMonth() {
+      if (!executiveState.supportLoading) return false;
 
-      if (!/^\d{4}-\d{2}$/.test(value)) return;
+      const selectedMonth =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+      const endMonth = String(filters.endDate || "").slice(0, 7);
+
+      return Boolean(
+        /^\d{4}-\d{2}$/.test(selectedMonth) &&
+        selectedMonth === endMonth
+      );
+    }
+
+    function loadSelectedMonthSupport(forceRefresh) {
+      if (!isAppsScriptRuntime()) return;
+
+      const request = buildSelectedMonthRequest(forceRefresh === true);
+
+      if (!request) return;
+
+      const cacheKey = getMonthlyCacheKey(
+        request.monthValue,
+        request.filters.region,
+        request.filters.branch,
+      );
+
+      if (!forceRefresh && executiveState.monthlyCache[cacheKey]) {
+        renderMonthlySales(executiveState.monthlyCache[cacheKey]);
+        return;
+      }
+
+      if (executiveState.monthlyLoadingKey === cacheKey) return;
+
+      const requestVersion = executiveState.monthlyRequestVersion + 1;
+      executiveState.monthlyRequestVersion = requestVersion;
+      executiveState.monthlyLoadingKey = cacheKey;
+
+      google.script.run
+        .withSuccessHandler((supportData) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          cacheMonthlySupport(supportData);
+
+          if (
+            executiveState.monthlyActive &&
+            getSelectedMonthCacheKey() === cacheKey
+          ) {
+            renderMonthlySales(
+              executiveState.monthlyCache[cacheKey] || supportData,
+            );
+          }
+        })
+        .withFailureHandler((error) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          console.warn(
+            "Monthly sales detail could not be loaded:",
+            error?.message || error,
+          );
+          showMonthlyLoading(
+            "Monthly detail could not be loaded. Please try Refresh.",
+          );
+        })
+        .getExecutiveSalesSupport(request.filters);
+    }
+
+    function buildSelectedMonthRequest(forceRefresh) {
+      const value =
+        document.getElementById("executiveMonthPicker")?.value || "";
+
+      if (!/^\d{4}-\d{2}$/.test(value)) return null;
 
       const [year, month] = value.split("-").map(Number);
-      const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0);
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0);
       const startInput = document.getElementById("startDate");
       const endInput = document.getElementById("endDate");
+      const minimum = parseIsoDate(
+        startInput?.min || toIsoDate(monthStart),
+      );
+      const maximum = parseIsoDate(
+        endInput?.max || toIsoDate(monthEnd),
+      );
+      const boundedStart = monthStart < minimum ? minimum : monthStart;
+      const boundedEnd = monthEnd > maximum ? maximum : monthEnd;
+      const currentFilters = readExecutiveFilters();
 
-      if (!startInput || !endInput) return;
+      if (boundedStart > boundedEnd) return null;
 
-      const minimum = parseIsoDate(startInput.min || toIsoDate(start));
-      const maximum = parseIsoDate(endInput.max || toIsoDate(end));
-      const boundedStart = start < minimum ? minimum : start;
-      const boundedEnd = end > maximum ? maximum : end;
-      const nextStart = toIsoDate(boundedStart);
-      const nextEnd = toIsoDate(boundedEnd);
-      const changed =
-        startInput.value !== nextStart || endInput.value !== nextEnd;
+      return {
+        monthValue: value,
+        filters: {
+          startDate: toIsoDate(boundedStart),
+          endDate: toIsoDate(boundedEnd),
+          region: currentFilters.region,
+          branch: currentFilters.branch,
+          forceRefresh: forceRefresh === true,
+        },
+      };
+    }
 
-      startInput.value = nextStart;
-      endInput.value = nextEnd;
-      executiveState.trendMode = "DAY";
-      updateTrendButtonState("DAY");
+    function primeMonthlyCacheFromSupport(supportData) {
+      cacheMonthlySupport(supportData);
+      cacheMonthlySupport(supportData?.monthlySnapshot);
+    }
 
-      if (changed) {
-        document.getElementById("applyButton")?.click();
-      } else {
-        scheduleExecutiveRefresh(0);
+    function cacheMonthlySupport(supportData) {
+      const cacheKey = getSupportMonthCacheKey(supportData);
+
+      if (!cacheKey) return "";
+
+      executiveState.monthlyCache[cacheKey] = supportData;
+      return cacheKey;
+    }
+
+    function getCachedSelectedMonthSupport() {
+      const cacheKey = getSelectedMonthCacheKey();
+
+      if (!cacheKey) return null;
+
+      if (executiveState.monthlyCache[cacheKey]) {
+        return executiveState.monthlyCache[cacheKey];
+      }
+
+      if (supportMatchesSelectedMonth(executiveState.latestSupport)) {
+        cacheMonthlySupport(executiveState.latestSupport);
+        return executiveState.latestSupport;
+      }
+
+      return null;
+    }
+
+    function getSelectedMonthCacheKey() {
+      const monthValue =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+
+      if (!/^\d{4}-\d{2}$/.test(monthValue)) return "";
+
+      return getMonthlyCacheKey(
+        monthValue,
+        filters.region,
+        filters.branch,
+      );
+    }
+
+    function getSupportMonthCacheKey(supportData) {
+      const applied = supportData?.filtersApplied || {};
+      const startDate = String(applied.startDate || "");
+      const endDate = String(applied.endDate || "");
+      const startMonth = startDate.slice(0, 7);
+      const endMonth = endDate.slice(0, 7);
+
+      if (
+        !/^\d{4}-\d{2}$/.test(startMonth) ||
+        startMonth !== endMonth
+      ) {
+        return "";
+      }
+
+      return getMonthlyCacheKey(
+        startMonth,
+        applied.region || "ALL",
+        applied.branch || "ALL",
+      );
+    }
+
+    function getMonthlyCacheKey(monthValue, region, branch) {
+      return [
+        String(monthValue || ""),
+        String(region || "ALL"),
+        String(branch || "ALL"),
+      ].join("|");
+    }
+
+    function showMonthlyLoading(message) {
+      const host = document.getElementById("monthlyRegionGroups");
+
+      if (host) {
+        host.innerHTML = `<div class="empty-chart">${escapeHtml(
+          message || "Loading monthly detail…",
+        )}</div>`;
       }
     }
 
@@ -1155,7 +1326,6 @@
               : formatPercentPrecise(kpis.weightedTargetAchievement)
           }`,
       );
-      syncMonthPicker();
 
       branches.forEach((branch) => {
         const region = branch.region || "Unspecified";
@@ -1226,7 +1396,7 @@
             <details class="executive-region-card" ${index === 0 ? "open" : ""}>
               <summary>
                 <strong>${escapeHtml(group.region)}</strong>
-                <span>${escapeHtml(formatCurrency(group.sales))} reported</span>
+                <span>${escapeHtml(formatCurrency(group.sales))} encoded</span>
                 <span>${escapeHtml(formatCurrency(group.officialActual))} official</span>
                 <span>${escapeHtml(formatCurrency(group.target))} target</span>
                 <span>${average == null ? "—" : escapeHtml(formatPercentPrecise(average))} avg.</span>
@@ -1236,7 +1406,7 @@
                 <thead>
                   <tr>
                     <th>Branch</th>
-                    <th>Reported sales</th>
+                    <th>Encoded collections</th>
                     <th>Official actual</th>
                     <th>Target</th>
                     <th>Official achievement</th>
@@ -1277,6 +1447,9 @@
         scheduleExecutiveRefresh(700);
       });
       document.getElementById("refreshButton")?.addEventListener("click", () => {
+        executiveState.monthlyCache = Object.create(null);
+        executiveState.monthlyLoadingKey = "";
+        executiveState.monthlyRequestVersion += 1;
         scheduleExecutiveRefresh(700);
       });
     }
@@ -1294,14 +1467,18 @@
 
       const requestVersion = executiveState.requestVersion + 1;
       executiveState.requestVersion = requestVersion;
+      executiveState.supportLoading = true;
       const filters = readExecutiveFilters();
 
       google.script.run
         .withSuccessHandler((supportData) => {
           if (requestVersion !== executiveState.requestVersion) return;
+          executiveState.supportLoading = false;
           renderExecutiveSupport(supportData);
         })
         .withFailureHandler((error) => {
+          if (requestVersion !== executiveState.requestVersion) return;
+          executiveState.supportLoading = false;
           console.warn(
             "Executive sales support could not be loaded:",
             error?.message || error,
@@ -1315,6 +1492,7 @@
       if (!supportData) return;
 
       executiveState.latestSupport = supportData;
+      primeMonthlyCacheFromSupport(supportData);
       const reconciliation = supportData.reconciliation || {};
       const kpis = supportData.kpis || {};
       const branchCount = Number(supportData.branchAchievementCount) || 0;
@@ -1371,9 +1549,16 @@
 
       renderOverviewSalesMomentum(supportData);
       renderSelectedExecutiveTrend();
-      renderMonthlySales(supportData);
 
       if (executiveState.monthlyActive) {
+        const monthlySupport = getCachedSelectedMonthSupport();
+
+        if (monthlySupport) {
+          renderMonthlySales(monthlySupport);
+        } else {
+          showMonthlyLoading("Loading the selected month…");
+          loadSelectedMonthSupport(false);
+        }
         document.getElementById("overviewView")?.classList.add("hidden");
         document.getElementById("slotUtilizationView")?.classList.add("hidden");
         document.getElementById("salesTrendsView")?.classList.add("hidden");

@@ -2,10 +2,10 @@
  * Executive sales reporting and official monthly-achievement alignment.
  *
  * Reporting rules:
- * 1. The Overview uses all encoded collections, including General Service Type
- *    NON and REPRINT, matching the broad encoded-collection view.
- * 2. The dedicated Sales Trends view excludes NON and REPRINT, matching the
- *    DlySLSTrd operational-sales pivot.
+ * 1. Every dashboard view uses all encoded collections, including General
+ *    Service Type NON and REPRINT, except the dedicated Sales Trends view.
+ * 2. Sales Trends alone excludes NON and REPRINT, matching the DlySLSTrd
+ *    operational-sales pivot.
  * 3. Official target achievement is read directly from the existing slsTGT
  *    tab, matching the SLSAch% pivot:
  *      N = Final monthly target
@@ -48,7 +48,7 @@ function buildExecutiveSalesSupport_(requestedFilters) {
     salesSource.minDate,
     salesSource.maxDate
   );
-  const resultType = 'EXECUTIVE_ALL_TRENDS_PIVOT_V6';
+  const resultType = 'EXECUTIVE_ONLY_TRENDS_EXCLUDE_V8_MONTH_PRELOAD';
 
   if (!forceRefresh) {
     const cached = readDashboardResultCache_(
@@ -140,7 +140,7 @@ function buildExecutiveSalesDataFromSources_(
     YEAR: executiveBuildTrendSeries_(aggregation.encodedTrends.YEAR)
   };
 
-  return {
+  const response = {
     filtersApplied: {
       startDate: formatDate_(filters.startDate, timezone),
       endDate: formatDate_(filters.endDate, timezone),
@@ -166,32 +166,194 @@ function buildExecutiveSalesDataFromSources_(
       ),
       branchRecordCount: officialResult.achievementCount
     },
-    reconciliation: {
-      reportedServiceSales: round2_(aggregation.includedAmount),
-      nonSalesReceipts: round2_(aggregation.nonAmount),
-      reprints: round2_(aggregation.reprintAmount),
-      otherExcluded: round2_(aggregation.otherExcludedAmount),
-      excludedTotal: round2_(
-        aggregation.nonAmount +
-        aggregation.reprintAmount +
-        aggregation.otherExcludedAmount
-      ),
-      encodedCollections: round2_(aggregation.encodedAmount),
-      encodedRows: aggregation.includedRows + aggregation.excludedRows,
-      encodedTransactions: round2_(aggregation.encodedTransactions),
-      officialActualCollections: round2_(
-        officialResult.selectedActual
-      ),
-      includedRows: aggregation.includedRows,
-      excludedRows: aggregation.excludedRows,
-      nonRows: aggregation.nonRows,
-      reprintRows: aggregation.reprintRows
-    },
+    reconciliation: executiveBuildReconciliation_(
+      aggregation,
+      officialResult
+    ),
     cacheStatus: sourceResult.cacheStatus || 'MISS',
     cachedAt:
       sourceResult.cachedAt instanceof Date
         ? sourceResult.cachedAt.toISOString()
         : String(sourceResult.cachedAt || '')
+  };
+
+  /*
+   * Preload the month represented by the selected end date. This uses the
+   * source data that is already in memory, so opening Monthly Sales does not
+   * need another server request. The snapshot is intentionally compact: it
+   * contains only the KPI and Region -> Branch detail needed by that tab.
+   */
+  response.monthlySnapshot = executiveBuildPreloadedMonthSnapshot_(
+    spreadsheet,
+    salesSource,
+    filters,
+    timezone,
+    response
+  );
+
+  return response;
+}
+
+function executiveBuildPreloadedMonthSnapshot_(
+  spreadsheet,
+  salesSource,
+  filters,
+  timezone,
+  preparedResponse
+) {
+  const anchor = filters.endDate;
+
+  if (!(anchor instanceof Date) || isNaN(anchor.getTime())) {
+    return null;
+  }
+
+  const monthStart = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    1
+  );
+  const monthEnd = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth() + 1,
+    0
+  );
+  const sourceMinimum = salesSource.minDate;
+  const sourceMaximum = salesSource.maxDate;
+
+  if (
+    sourceMinimum instanceof Date &&
+    monthEnd < sourceMinimum
+  ) {
+    return null;
+  }
+
+  if (
+    sourceMaximum instanceof Date &&
+    monthStart > sourceMaximum
+  ) {
+    return null;
+  }
+
+  const boundedStart =
+    sourceMinimum instanceof Date && sourceMinimum > monthStart
+      ? new Date(sourceMinimum.getTime())
+      : monthStart;
+  const boundedEnd =
+    sourceMaximum instanceof Date && sourceMaximum < monthEnd
+      ? new Date(sourceMaximum.getTime())
+      : monthEnd;
+  const monthlyFilters = {
+    startDate: boundedStart,
+    endDate: boundedEnd,
+    region: filters.region,
+    branch: filters.branch
+  };
+
+  if (executiveSameDateRange_(filters, monthlyFilters)) {
+    return executiveCompactMonthlySnapshot_(preparedResponse);
+  }
+
+  const aggregation = executiveCreateAggregation_();
+
+  executiveAggregateSales_(
+    salesSource,
+    monthlyFilters,
+    timezone,
+    aggregation
+  );
+
+  const officialResult = executiveReadOfficialAchievement_(
+    spreadsheet,
+    salesSource,
+    monthlyFilters
+  );
+  const branchSummaries = executiveBuildBranchSummaries_(
+    salesSource,
+    monthlyFilters,
+    aggregation,
+    officialResult
+  );
+  const kpis = executiveBuildKpis_(
+    branchSummaries,
+    aggregation,
+    officialResult
+  );
+
+  return {
+    filtersApplied: {
+      startDate: formatDate_(boundedStart, timezone),
+      endDate: formatDate_(boundedEnd, timezone),
+      region: monthlyFilters.region,
+      branch: monthlyFilters.branch
+    },
+    branches: branchSummaries,
+    kpis: kpis,
+    branchAchievementCount: kpis.branchAchievementCount,
+    officialAchievement: {
+      sourceSheet: officialResult.source,
+      target: round2_(officialResult.selectedTarget),
+      actualCollections: round2_(officialResult.selectedActual),
+      averageBranchAchievement: nullableRound2_(
+        officialResult.averageAchievement
+      ),
+      branchRecordCount: officialResult.achievementCount
+    },
+    reconciliation: executiveBuildReconciliation_(
+      aggregation,
+      officialResult
+    ),
+    preloaded: true
+  };
+}
+
+function executiveCompactMonthlySnapshot_(response) {
+  return {
+    filtersApplied: response.filtersApplied,
+    branches: response.branches,
+    kpis: response.kpis,
+    branchAchievementCount: response.branchAchievementCount,
+    officialAchievement: response.officialAchievement,
+    reconciliation: response.reconciliation,
+    preloaded: true
+  };
+}
+
+function executiveSameDateRange_(firstFilters, secondFilters) {
+  return Boolean(
+    firstFilters &&
+    secondFilters &&
+    firstFilters.startDate instanceof Date &&
+    firstFilters.endDate instanceof Date &&
+    secondFilters.startDate instanceof Date &&
+    secondFilters.endDate instanceof Date &&
+    firstFilters.startDate.getTime() ===
+      secondFilters.startDate.getTime() &&
+    firstFilters.endDate.getTime() ===
+      secondFilters.endDate.getTime() &&
+    firstFilters.region === secondFilters.region &&
+    firstFilters.branch === secondFilters.branch
+  );
+}
+
+function executiveBuildReconciliation_(aggregation, officialResult) {
+  return {
+    reportedServiceSales: round2_(aggregation.includedAmount),
+    nonSalesReceipts: round2_(aggregation.nonAmount),
+    reprints: round2_(aggregation.reprintAmount),
+    otherExcluded: round2_(aggregation.otherExcludedAmount),
+    excludedTotal: round2_(
+      aggregation.nonAmount +
+      aggregation.reprintAmount +
+      aggregation.otherExcludedAmount
+    ),
+    encodedCollections: round2_(aggregation.encodedAmount),
+    encodedRows: aggregation.includedRows + aggregation.excludedRows,
+    encodedTransactions: round2_(aggregation.encodedTransactions),
+    officialActualCollections: round2_(officialResult.selectedActual),
+    includedRows: aggregation.includedRows,
+    excludedRows: aggregation.excludedRows,
+    nonRows: aggregation.nonRows,
+    reprintRows: aggregation.reprintRows
   };
 }
 
@@ -263,8 +425,28 @@ function executiveAggregateSales_(
       salesRow.serviceGroup
     );
 
+    /*
+     * All non-trend dashboard views use every encoded collection row,
+     * including NON and REPRINT.
+     */
     aggregation.encodedAmount += amount;
     aggregation.encodedTransactions += transactions;
+
+    const branch = executiveGetBranchAggregate_(
+      aggregation.branches,
+      salesRow.branchKey,
+      identity.branchName,
+      identity.region
+    );
+
+    branch.sales += amount;
+    branch.transactions += transactions;
+
+    addToMap_(
+      aggregation.serviceMix,
+      salesRow.serviceGroup,
+      amount
+    );
 
     ['DAY', 'WEEK', 'MONTH', 'YEAR'].forEach(
       function addEveryEncodedTrendMode(mode) {
@@ -279,6 +461,10 @@ function executiveAggregateSales_(
       }
     );
 
+    /*
+     * The dedicated Sales Trends series is the only place that excludes
+     * NON and REPRINT, matching the DlySLSTrd pivot.
+     */
     if (classification.excluded) {
       aggregation.excludedRows += 1;
 
@@ -297,22 +483,6 @@ function executiveAggregateSales_(
 
     aggregation.includedRows += 1;
     aggregation.includedAmount += amount;
-
-    const branch = executiveGetBranchAggregate_(
-      aggregation.branches,
-      salesRow.branchKey,
-      identity.branchName,
-      identity.region
-    );
-
-    branch.sales += amount;
-    branch.transactions += transactions;
-
-    addToMap_(
-      aggregation.serviceMix,
-      salesRow.serviceGroup,
-      amount
-    );
 
     ['DAY', 'WEEK', 'MONTH', 'YEAR'].forEach(
       function addEveryTrendMode(mode) {
@@ -682,12 +852,20 @@ function executiveBuildKpis_(
     totalTransactions += branchSummaries[branchIndex].transactions;
   }
 
-  const reportedSales = round2_(aggregation.includedAmount);
+  const encodedSales = round2_(aggregation.encodedAmount);
+  const reportedServiceSales = round2_(aggregation.includedAmount);
   const target = round2_(officialResult.selectedTarget);
   const officialActual = round2_(officialResult.selectedActual);
 
   return {
-    sales: reportedSales,
+    // Used by Monthly Sales and all non-trend views.
+    sales: encodedSales,
+    encodedCollections: encodedSales,
+    encodedTransactions: round2_(aggregation.encodedTransactions),
+
+    // Used only by the dedicated Sales Trends view and reconciliation.
+    reportedServiceSales: reportedServiceSales,
+
     officialActualCollections: officialActual,
     target: target,
     targetAchievement: nullableRound2_(
@@ -697,15 +875,13 @@ function executiveBuildKpis_(
       percentageOrNull_(officialActual, target)
     ),
     reportedTargetProgress: nullableRound2_(
-      percentageOrNull_(reportedSales, target)
+      percentageOrNull_(reportedServiceSales, target)
     ),
     branchAchievementCount: officialResult.achievementCount,
     transactions: round2_(totalTransactions),
     averageTicket: round2_(
-      divideOrDefault_(reportedSales, totalTransactions, 0)
+      divideOrDefault_(encodedSales, totalTransactions, 0)
     ),
-    encodedCollections: round2_(aggregation.encodedAmount),
-    encodedTransactions: round2_(aggregation.encodedTransactions),
     excludedCollections: round2_(
       aggregation.encodedAmount - aggregation.includedAmount
     )
@@ -856,11 +1032,9 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
 
   /*
    * Keep the normal Overview values and charts produced by buildDashboardData_.
-   * Those values include every encoded collection entry, including NON and
-   * REPRINT. Only the official target/achievement fields are replaced here.
-   *
-   * The dedicated Sales Trends tab uses executiveData.trends, which excludes
-   * NON and REPRINT to match the DlySLSTrd pivot.
+   * All non-trend views include every encoded collection entry, including NON
+   * and REPRINT. Only executiveData.trends excludes those categories, matching
+   * the DlySLSTrd pivot.
    */
   dashboardData.kpis.officialActualCollections =
     executiveData.kpis.officialActualCollections;
@@ -879,7 +1053,7 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
     executiveData.kpis.excludedCollections;
 
   dashboardData.meta.salesReportingRule =
-    'OVERVIEW_ALL_ENCODED_TRENDS_EXCLUDE_NON_AND_REPRINT';
+    'ALL_VIEWS_ENCODED_EXCEPT_SALES_TRENDS';
   dashboardData.meta.targetAchievementMethod =
     'DIRECT_SLSACH_AVERAGE_INCLUDING_ZERO_ROWS';
   dashboardData.health.salesRowsExcludedFromTrends =
