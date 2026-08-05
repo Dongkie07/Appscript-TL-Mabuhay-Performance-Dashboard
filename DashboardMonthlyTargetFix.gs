@@ -48,7 +48,7 @@ function buildExecutiveSalesSupport_(requestedFilters) {
     salesSource.minDate,
     salesSource.maxDate
   );
-  const resultType = 'EXECUTIVE_ONLY_TRENDS_EXCLUDE_V8_MONTH_PRELOAD';
+  const resultType = 'EXECUTIVE_PERF_V10_PIVOT_ALIGNED';
 
   if (!forceRefresh) {
     const cached = readDashboardResultCache_(
@@ -98,16 +98,25 @@ function buildExecutiveSalesDataFromSources_(
     spreadsheet.getSpreadsheetTimeZone() ||
     Session.getScriptTimeZone();
   const aggregation = executiveCreateAggregation_();
+  const sharedTrendBucketCache = Object.create(null);
 
   executiveAggregateSales_(
     salesSource,
     filters,
     timezone,
-    aggregation
+    aggregation,
+    sharedTrendBucketCache
   );
 
-  const officialResult = executiveReadOfficialAchievement_(
-    spreadsheet,
+  /*
+   * Read the official SLSAch% source once. The same in-memory values are reused
+   * for the selected range and the preloaded month snapshot.
+   */
+  const officialSource =
+    sourceResult.sources.officialTargets ||
+    executiveReadOfficialSource_(spreadsheet);
+  const officialResult = executiveCalculateOfficialAchievement_(
+    officialSource,
     salesSource,
     filters
   );
@@ -157,6 +166,11 @@ function buildExecutiveSalesDataFromSources_(
     branches: branchSummaries,
     kpis: kpis,
     branchAchievementCount: kpis.branchAchievementCount,
+    transactionSource: {
+      sheet: DASHBOARD_CONFIG.SALES_SHEET,
+      column: 'BH',
+      aggregation: 'SUM'
+    },
     officialAchievement: {
       sourceSheet: officialResult.source,
       target: round2_(officialResult.selectedTarget),
@@ -184,22 +198,24 @@ function buildExecutiveSalesDataFromSources_(
    * contains only the KPI and Region -> Branch detail needed by that tab.
    */
   response.monthlySnapshot = executiveBuildPreloadedMonthSnapshot_(
-    spreadsheet,
     salesSource,
     filters,
     timezone,
-    response
+    response,
+    officialSource,
+    sharedTrendBucketCache
   );
 
   return response;
 }
 
 function executiveBuildPreloadedMonthSnapshot_(
-  spreadsheet,
   salesSource,
   filters,
   timezone,
-  preparedResponse
+  preparedResponse,
+  officialSource,
+  sharedTrendBucketCache
 ) {
   const anchor = filters.endDate;
 
@@ -259,11 +275,12 @@ function executiveBuildPreloadedMonthSnapshot_(
     salesSource,
     monthlyFilters,
     timezone,
-    aggregation
+    aggregation,
+    sharedTrendBucketCache
   );
 
-  const officialResult = executiveReadOfficialAchievement_(
-    spreadsheet,
+  const officialResult = executiveCalculateOfficialAchievement_(
+    officialSource,
     salesSource,
     monthlyFilters
   );
@@ -289,6 +306,11 @@ function executiveBuildPreloadedMonthSnapshot_(
     branches: branchSummaries,
     kpis: kpis,
     branchAchievementCount: kpis.branchAchievementCount,
+    transactionSource: {
+      sheet: DASHBOARD_CONFIG.SALES_SHEET,
+      column: 'BH',
+      aggregation: 'SUM'
+    },
     officialAchievement: {
       sourceSheet: officialResult.source,
       target: round2_(officialResult.selectedTarget),
@@ -312,6 +334,7 @@ function executiveCompactMonthlySnapshot_(response) {
     branches: response.branches,
     kpis: response.kpis,
     branchAchievementCount: response.branchAchievementCount,
+    transactionSource: response.transactionSource,
     officialAchievement: response.officialAchievement,
     reconciliation: response.reconciliation,
     preloaded: true
@@ -390,11 +413,20 @@ function executiveAggregateSales_(
   salesSource,
   filters,
   timezone,
-  aggregation
+  aggregation,
+  sharedTrendBucketCache
 ) {
+  const trendBucketCache =
+    sharedTrendBucketCache || Object.create(null);
+  const rowBounds = executiveFindSalesDateBounds_(
+    salesSource,
+    filters.startDate,
+    filters.endDate
+  );
+
   for (
-    let rowIndex = 0;
-    rowIndex < salesSource.rows.length;
+    let rowIndex = rowBounds.start;
+    rowIndex < rowBounds.end;
     rowIndex += 1
   ) {
     const salesRow = salesSource.rows[rowIndex];
@@ -448,17 +480,35 @@ function executiveAggregateSales_(
       amount
     );
 
-    ['DAY', 'WEEK', 'MONTH', 'YEAR'].forEach(
-      function addEveryEncodedTrendMode(mode) {
-        executiveAddTrendPoint_(
-          aggregation.encodedTrends[mode],
-          salesRow.date,
-          amount,
-          transactions,
-          mode,
-          timezone
-        );
-      }
+    const trendBuckets = executiveGetAllTrendBuckets_(
+      salesRow.date,
+      timezone,
+      trendBucketCache
+    );
+
+    executiveAddTrendBucket_(
+      aggregation.encodedTrends.DAY,
+      trendBuckets.DAY,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.encodedTrends.WEEK,
+      trendBuckets.WEEK,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.encodedTrends.MONTH,
+      trendBuckets.MONTH,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.encodedTrends.YEAR,
+      trendBuckets.YEAR,
+      amount,
+      transactions
     );
 
     /*
@@ -484,19 +534,98 @@ function executiveAggregateSales_(
     aggregation.includedRows += 1;
     aggregation.includedAmount += amount;
 
-    ['DAY', 'WEEK', 'MONTH', 'YEAR'].forEach(
-      function addEveryTrendMode(mode) {
-        executiveAddTrendPoint_(
-          aggregation.trends[mode],
-          salesRow.date,
-          amount,
-          transactions,
-          mode,
-          timezone
-        );
-      }
+    executiveAddTrendBucket_(
+      aggregation.trends.DAY,
+      trendBuckets.DAY,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.trends.WEEK,
+      trendBuckets.WEEK,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.trends.MONTH,
+      trendBuckets.MONTH,
+      amount,
+      transactions
+    );
+    executiveAddTrendBucket_(
+      aggregation.trends.YEAR,
+      trendBuckets.YEAR,
+      amount,
+      transactions
     );
   }
+}
+
+/**
+ * Finds the slice of date-sorted sales rows intersecting the selected range.
+ * Falls back to a full scan when an older source-cache payload is encountered.
+ */
+function executiveFindSalesDateBounds_(salesSource, startDate, endDate) {
+  const rows = salesSource && Array.isArray(salesSource.rows)
+    ? salesSource.rows
+    : [];
+  const datedRowCount = Math.max(
+    0,
+    Math.min(
+      Number(salesSource && salesSource.datedRowCount) || rows.length,
+      rows.length
+    )
+  );
+
+  if (
+    !rows.length ||
+    !(startDate instanceof Date) ||
+    !(endDate instanceof Date) ||
+    !(rows[0] && rows[0].date instanceof Date)
+  ) {
+    return { start: 0, end: rows.length };
+  }
+
+  return {
+    start: executiveLowerBoundDate_(rows, startDate.getTime(), datedRowCount),
+    end: executiveUpperBoundDate_(rows, endDate.getTime(), datedRowCount)
+  };
+}
+
+function executiveLowerBoundDate_(rows, targetTime, endIndex) {
+  let low = 0;
+  let high = endIndex;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const rowTime = rows[middle].date.getTime();
+
+    if (rowTime < targetTime) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  return low;
+}
+
+function executiveUpperBoundDate_(rows, targetTime, endIndex) {
+  let low = 0;
+  let high = endIndex;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const rowTime = rows[middle].date.getTime();
+
+    if (rowTime <= targetTime) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  return low;
 }
 
 function executiveClassifyService_(serviceValue) {
@@ -567,24 +696,65 @@ function executiveReadOfficialAchievement_(
   salesSource,
   filters
 ) {
+  return executiveCalculateOfficialAchievement_(
+    executiveReadOfficialSource_(spreadsheet),
+    salesSource,
+    filters
+  );
+}
+
+function executiveReadOfficialSource_(spreadsheet) {
   const targetSheet = executiveFindTargetSheet_(spreadsheet);
 
   if (!targetSheet || targetSheet.getLastRow() < 2) {
     return {
-      byBranch: Object.create(null),
-      identities: Object.create(null),
       source: 'CATEGORY OF SALES V2',
-      selectedTarget: 0,
-      selectedActual: 0,
-      achievementSum: 0,
-      achievementCount: 0,
-      averageAchievement: null
+      values: []
     };
   }
 
-  const values = targetSheet
-    .getRange(2, 1, targetSheet.getLastRow() - 1, 17)
-    .getValues();
+  const lastRow = targetSheet.getLastRow();
+  const dataRowCount = getActualDataRowCountByColumn_(
+    targetSheet,
+    1,
+    lastRow
+  );
+
+  if (dataRowCount < 1) {
+    return {
+      source: targetSheet.getName(),
+      values: []
+    };
+  }
+
+  return {
+    source: targetSheet.getName(),
+    values: targetSheet
+      .getRange(2, 1, dataRowCount, 17)
+      .getValues()
+  };
+}
+
+function executiveCalculateOfficialAchievement_(
+  officialSource,
+  salesSource,
+  filters
+) {
+  const source = officialSource || {
+    source: 'slsTGT',
+    rows: [],
+    values: []
+  };
+  const compactRows = Array.isArray(source.rows)
+    ? source.rows
+    : [];
+  const legacyValues = Array.isArray(source.values)
+    ? source.values
+    : [];
+  const records = compactRows.length
+    ? compactRows
+    : legacyValues;
+  const usingCompactRows = compactRows.length > 0;
   const byBranch = Object.create(null);
   const identities = Object.create(null);
   let selectedTarget = 0;
@@ -592,13 +762,23 @@ function executiveReadOfficialAchievement_(
   let achievementSum = 0;
   let achievementCount = 0;
 
-  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
-    const sourceRow = values[rowIndex];
-    const year = positiveInteger_(sourceRow[0]);
-    const month = positiveInteger_(sourceRow[1]);
-    const rawRegion = normalizeRegion_(sourceRow[3]);
-    const branchName = cleanText_(sourceRow[5]);
-    const branchKey = normalizeKey_(branchName);
+  for (let rowIndex = 0; rowIndex < records.length; rowIndex += 1) {
+    const sourceRow = records[rowIndex];
+    const year = positiveInteger_(
+      usingCompactRows ? sourceRow.year : sourceRow[0]
+    );
+    const month = positiveInteger_(
+      usingCompactRows ? sourceRow.month : sourceRow[1]
+    );
+    const rawRegion = normalizeRegion_(
+      usingCompactRows ? sourceRow.region : sourceRow[3]
+    );
+    const branchName = cleanText_(
+      usingCompactRows ? sourceRow.branchName : sourceRow[5]
+    );
+    const branchKey =
+      (usingCompactRows && sourceRow.branchKey) ||
+      normalizeKey_(branchName);
 
     if (
       !year ||
@@ -629,9 +809,15 @@ function executiveReadOfficialAchievement_(
       continue;
     }
 
-    const target = nonNegativeNumber_(sourceRow[13]);
-    const actual = nonNegativeNumber_(sourceRow[15]);
-    const achievement = executiveNullableNumber_(sourceRow[16]);
+    const target = nonNegativeNumber_(
+      usingCompactRows ? sourceRow.target : sourceRow[13]
+    );
+    const actual = nonNegativeNumber_(
+      usingCompactRows ? sourceRow.actual : sourceRow[15]
+    );
+    const achievement = executiveNullableNumber_(
+      usingCompactRows ? sourceRow.achievement : sourceRow[16]
+    );
 
     if (!byBranch[branchKey]) {
       byBranch[branchKey] = {
@@ -659,9 +845,10 @@ function executiveReadOfficialAchievement_(
     selectedActual += actual;
     identities[branchKey] = {
       branchName:
-        canonical && canonical.branchName
+        branchName ||
+        (canonical && canonical.branchName
           ? canonical.branchName
-          : branchName,
+          : branchKey),
       region: region
     };
   }
@@ -669,7 +856,7 @@ function executiveReadOfficialAchievement_(
   return {
     byBranch: byBranch,
     identities: identities,
-    source: targetSheet.getName(),
+    source: source.source,
     selectedTarget: round2_(selectedTarget),
     selectedActual: round2_(selectedActual),
     achievementSum: achievementSum,
@@ -757,8 +944,8 @@ function executiveBuildBranchSummaries_(
     const salesAggregate = aggregation.branches[branchKey] || {};
     const official = officialResult.byBranch[branchKey] || {};
     const branchName =
-      canonical.branchName ||
       officialIdentity.branchName ||
+      canonical.branchName ||
       salesAggregate.branchName ||
       branchKey;
     const region =
@@ -888,6 +1075,43 @@ function executiveBuildKpis_(
   };
 }
 
+function executiveGetAllTrendBuckets_(date, timezone, cache) {
+  const cacheKey = String(date.getTime());
+
+  if (cache[cacheKey]) {
+    return cache[cacheKey];
+  }
+
+  const buckets = {
+    DAY: executiveCreateTrendBucket_(date, 'DAY', timezone),
+    WEEK: executiveCreateTrendBucket_(date, 'WEEK', timezone),
+    MONTH: executiveCreateTrendBucket_(date, 'MONTH', timezone),
+    YEAR: executiveCreateTrendBucket_(date, 'YEAR', timezone)
+  };
+
+  cache[cacheKey] = buckets;
+  return buckets;
+}
+
+function executiveAddTrendBucket_(
+  trendMap,
+  bucket,
+  amount,
+  transactions
+) {
+  if (!trendMap[bucket.key]) {
+    trendMap[bucket.key] = {
+      key: bucket.key,
+      label: bucket.label,
+      sales: 0,
+      transactions: 0
+    };
+  }
+
+  trendMap[bucket.key].sales += amount;
+  trendMap[bucket.key].transactions += transactions;
+}
+
 function executiveAddTrendPoint_(
   trendMap,
   date,
@@ -902,17 +1126,12 @@ function executiveAddTrendPoint_(
     timezone
   );
 
-  if (!trendMap[bucket.key]) {
-    trendMap[bucket.key] = {
-      key: bucket.key,
-      label: bucket.label,
-      sales: 0,
-      transactions: 0
-    };
-  }
-
-  trendMap[bucket.key].sales += amount;
-  trendMap[bucket.key].transactions += transactions;
+  executiveAddTrendBucket_(
+    trendMap,
+    bucket,
+    amount,
+    transactions
+  );
 }
 
 function executiveCreateTrendBucket_(date, trendMode, timezone) {

@@ -154,7 +154,7 @@
   .executive-monthly-kpis {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .executive-monthly-kpi {
@@ -196,7 +196,7 @@
     cursor: pointer;
     display: grid;
     gap: 12px;
-    grid-template-columns: minmax(160px, 1.4fr) repeat(4, minmax(100px, 1fr));
+    grid-template-columns: minmax(160px, 1.4fr) repeat(3, minmax(110px, 1fr));
     list-style: none;
     padding: 14px 16px;
   }
@@ -263,8 +263,7 @@
       grid-template-columns: minmax(150px, 1.4fr) repeat(2, 1fr);
     }
 
-    .executive-region-card summary span:nth-of-type(3),
-    .executive-region-card summary span:nth-of-type(4) {
+    .executive-region-card summary span:nth-of-type(3) {
       display: none;
     }
   }
@@ -577,7 +576,7 @@
       const trendPanel = document.getElementById("salesTrendChart")?.closest(".panel");
       const trendSubtitle = trendPanel?.querySelector(".panel-subtitle");
 
-      if (salesLabel) salesLabel.textContent = "Total encoded collections";
+      if (salesLabel) salesLabel.textContent = "Gross sales";
       if (targetLabel) targetLabel.textContent = "Average branch achievement";
       if (trendSubtitle) {
         trendSubtitle.textContent =
@@ -673,17 +672,17 @@
       const subtitle = panel.querySelector(".panel-subtitle");
       const tag = document.getElementById("trendBucket");
 
-      if (title) title.textContent = "Sales encoded";
+      if (title) title.textContent = "Sales momentum";
       if (subtitle) {
         subtitle.textContent =
-          "All collection entries for the selected date range, including NON and REPRINT";
+          "Encoded sales amount over the selected date range";
       }
       if (tag) tag.textContent = "Auto view";
 
       host.id = "executiveOverviewSalesMomentum";
       host.classList.add("executive-overview-momentum");
       host.innerHTML =
-        '<div class="empty-chart">Preparing encoded collections for the selected range…</div>';
+        '<div class="empty-chart">Preparing sales for the selected range…</div>';
     }
 
     function addSalesTrendsView() {
@@ -714,8 +713,8 @@
         <section class="executive-trends-hero">
           <div>
             <div class="eyebrow">Executive trend analysis</div>
-            <h2>Reported Service Sales Trends</h2>
-            <p>NON and REPRINT are excluded. Change the date filters above, then switch grouping instantly.</p>
+            <h2>Sales Trends</h2>
+            <p>Matches the DlySLSTrd reporting basis. Change the date filters, then switch grouping instantly.</p>
           </div>
           <span class="executive-cache-note" id="executiveTrendCacheNote">Preparing all trend views…</span>
         </section>
@@ -842,7 +841,7 @@
         host.innerHTML = `
           <div class="executive-overview-summary">
             <div class="executive-overview-total">
-              <span>Total encoded collections</span>
+              <span>Total sales</span>
               <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
             </div>
             <div class="executive-overview-meta">
@@ -850,7 +849,7 @@
               ${escapeHtml(rangeLabel)}
             </div>
           </div>
-          <div class="empty-chart">No encoded collections for this selection.</div>
+          <div class="empty-chart">No sales data for this selection.</div>
         `;
         return;
       }
@@ -858,12 +857,12 @@
       host.innerHTML = `
         <div class="executive-overview-summary">
           <div class="executive-overview-total">
-            <span>Total encoded collections</span>
+            <span>Total sales</span>
             <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
           </div>
           <div class="executive-overview-meta">
-            ${escapeHtml(formatNumber(encodedRows))} encoded rows · ${escapeHtml(groupingLabel)} grouping<br>
-            ${escapeHtml(rangeLabel)} · includes NON and REPRINT
+            ${escapeHtml(formatNumber(encodedRows))} matched rows · ${escapeHtml(groupingLabel)} grouping<br>
+            ${escapeHtml(rangeLabel)}
           </div>
         </div>
         <div class="executive-overview-chart" id="executiveOverviewTrendChart"></div>
@@ -872,7 +871,7 @@
       renderExecutiveTrendChartInto(
         document.getElementById("executiveOverviewTrendChart"),
         points,
-        `Total encoded collections for ${rangeLabel}`,
+        `Sales for ${rangeLabel}`,
       );
     }
 
@@ -953,14 +952,14 @@
       strip.innerHTML = `
         <article class="executive-reconciliation-card rule">
           <span>Reporting rule</span>
-          <strong>Sales Trends only follows DlySLSTrd: NON and REPRINT are excluded there.</strong>
+          <strong>Sales Trends follows the DlySLSTrd reporting basis.</strong>
         </article>
         <article class="executive-reconciliation-card excluded">
-          <span>NON receipts</span>
+          <span>Adjustments</span>
           <strong id="executiveNonAmount">—</strong>
         </article>
         <article class="executive-reconciliation-card excluded">
-          <span>Reprints</span>
+          <span>Reissued records</span>
           <strong id="executiveReprintAmount">—</strong>
         </article>
         <article class="executive-reconciliation-card">
@@ -1001,9 +1000,9 @@
       view.innerHTML = `
         <section class="executive-monthly-hero">
           <div>
-            <div class="eyebrow">Executive monthly performance</div>
+            <div class="eyebrow">Monthly target performance</div>
             <h2>Monthly Sales Detail</h2>
-            <p>All encoded collections, direct monthly targets, and average branch achievement.</p>
+            <p>Actual collections, monthly targets, and achievement values from SLSAch%.</p>
           </div>
           <label class="executive-month-field">
             <span>Reporting month</span>
@@ -1012,24 +1011,19 @@
         </section>
         <section class="executive-monthly-kpis">
           <article class="executive-monthly-kpi">
-            <span>Encoded collections</span>
-            <strong id="monthlyReportedSales">—</strong>
-            <small>Includes NON and REPRINT</small>
-          </article>
-          <article class="executive-monthly-kpi">
-            <span>Official actual collections</span>
+            <span>Actual collections</span>
             <strong id="monthlyOfficialCollections">—</strong>
-            <small>From slsTGT column P</small>
+            <small>Monthly total</small>
           </article>
           <article class="executive-monthly-kpi">
-            <span>Official monthly target</span>
+            <span>Monthly target</span>
             <strong id="monthlySalesTarget">—</strong>
-            <small>From slsTGT column N</small>
+            <small>Monthly total</small>
           </article>
           <article class="executive-monthly-kpi">
-            <span>Official average branch achievement</span>
+            <span>Average branch achievement</span>
             <strong id="monthlyAverageAchievement">—</strong>
-            <small id="monthlyAchievementNote">Matches SLSAch%</small>
+            <small id="monthlyAchievementNote">Based on branch achievement rows</small>
           </article>
         </section>
         <section class="executive-monthly-regions" id="monthlyRegionGroups">
@@ -1333,7 +1327,6 @@
       const branches = supportData.branches || [];
       const regionMap = Object.create(null);
 
-      setText("monthlyReportedSales", formatCurrency(kpis.sales));
       setText(
         "monthlyOfficialCollections",
         formatCurrency(kpis.officialActualCollections),
@@ -1347,40 +1340,48 @@
       );
       setText(
         "monthlyAchievementNote",
-        `Average of ${formatNumber(kpis.branchAchievementCount || 0)} branch rows · ` +
-          `weighted ${
-            kpis.weightedTargetAchievement == null
-              ? "—"
-              : formatPercentPrecise(kpis.weightedTargetAchievement)
-          }`,
+        `Average of ${formatNumber(
+          kpis.branchAchievementCount || 0,
+        )} branch rows`,
       );
 
       branches.forEach((branch) => {
         const region = branch.region || "Unspecified";
+
         if (!regionMap[region]) {
           regionMap[region] = {
             region,
             branches: [],
-            sales: 0,
-            officialActual: 0,
+            actual: 0,
             target: 0,
             achievementSum: 0,
             achievementCount: 0,
           };
         }
+
         const group = regionMap[region];
         group.branches.push(branch);
-        group.sales += Number(branch.sales) || 0;
-        group.officialActual += Number(branch.officialActualCollections) || 0;
+        group.actual += Number(branch.officialActualCollections) || 0;
         group.target += Number(branch.target) || 0;
+
         if (branch.targetAchievement != null) {
           group.achievementSum += Number(branch.targetAchievement) || 0;
           group.achievementCount += 1;
         }
       });
 
-      const groups = Object.values(regionMap).sort(compareRegions);
+      const groups = Object.values(regionMap)
+        .map((group) => {
+          group.averageAchievement =
+            group.achievementCount > 0
+              ? group.achievementSum / group.achievementCount
+              : null;
+          return group;
+        })
+        .sort(compareMonthlyRegionPerformance);
+
       const host = document.getElementById("monthlyRegionGroups");
+
       if (!host) return;
 
       if (!groups.length) {
@@ -1391,21 +1392,19 @@
 
       host.innerHTML = groups
         .map((group, index) => {
-          const average =
-            group.achievementCount > 0
-              ? group.achievementSum / group.achievementCount
-              : null;
-          const weighted =
-            group.target > 0
-              ? (group.officialActual / group.target) * 100
-              : null;
           const branchRows = group.branches
-            .sort((a, b) => (Number(b.sales) || 0) - (Number(a.sales) || 0))
+            .sort(
+              (first, second) =>
+                (Number(second.officialActualCollections) || 0) -
+                  (Number(first.officialActualCollections) || 0) ||
+                String(first.branchName || "").localeCompare(
+                  String(second.branchName || ""),
+                ),
+            )
             .map(
               (branch) => `
                 <tr>
                   <td>${escapeHtml(branch.branchName)}</td>
-                  <td>${escapeHtml(formatCurrency(branch.sales))}</td>
                   <td>${escapeHtml(
                     formatCurrency(branch.officialActualCollections),
                   )}</td>
@@ -1413,7 +1412,9 @@
                   <td>${
                     branch.targetAchievement == null
                       ? "—"
-                      : escapeHtml(formatPercentPrecise(branch.targetAchievement))
+                      : escapeHtml(
+                          formatPercentPrecise(branch.targetAchievement),
+                        )
                   }</td>
                 </tr>
               `,
@@ -1424,20 +1425,23 @@
             <details class="executive-region-card" ${index === 0 ? "open" : ""}>
               <summary>
                 <strong>${escapeHtml(group.region)}</strong>
-                <span>${escapeHtml(formatCurrency(group.sales))} encoded</span>
-                <span>${escapeHtml(formatCurrency(group.officialActual))} official</span>
+                <span>${escapeHtml(formatCurrency(group.actual))} actual</span>
                 <span>${escapeHtml(formatCurrency(group.target))} target</span>
-                <span>${average == null ? "—" : escapeHtml(formatPercentPrecise(average))} avg.</span>
-                <span>${weighted == null ? "—" : escapeHtml(formatPercentPrecise(weighted))} weighted</span>
+                <span>${
+                  group.averageAchievement == null
+                    ? "—"
+                    : escapeHtml(
+                        formatPercentPrecise(group.averageAchievement),
+                      )
+                } achievement</span>
               </summary>
               <table>
                 <thead>
                   <tr>
                     <th>Branch</th>
-                    <th>Encoded collections</th>
-                    <th>Official actual</th>
-                    <th>Target</th>
-                    <th>Official achievement</th>
+                    <th>Actual collections</th>
+                    <th>Monthly target</th>
+                    <th>Achievement</th>
                   </tr>
                 </thead>
                 <tbody>${branchRows}</tbody>
@@ -1448,6 +1452,22 @@
         .join("");
     }
 
+    function compareMonthlyRegionPerformance(first, second) {
+      const firstAchievement =
+        first.averageAchievement == null
+          ? Number.NEGATIVE_INFINITY
+          : Number(first.averageAchievement);
+      const secondAchievement =
+        second.averageAchievement == null
+          ? Number.NEGATIVE_INFINITY
+          : Number(second.averageAchievement);
+
+      if (secondAchievement !== firstAchievement) {
+        return secondAchievement - firstAchievement;
+      }
+
+      return compareRegions(first, second);
+    }
 
     function compareRegions(first, second) {
       if (first.region === "NIR") return -1;
@@ -1596,7 +1616,6 @@
       const reconciliation = supportData.reconciliation || {};
       const kpis = supportData.kpis || {};
       const branchCount = Number(supportData.branchAchievementCount) || 0;
-      const weighted = kpis.weightedTargetAchievement;
       const targetSub = document.getElementById("kpiTargetSub");
       const salesSub = document.getElementById("kpiSalesSub");
       const cacheNote = document.getElementById("executiveTrendCacheNote");
@@ -1621,15 +1640,12 @@
           (Number(reconciliation.includedRows) || 0) +
             (Number(reconciliation.excludedRows) || 0);
         salesSub.textContent =
-          `${formatNumber(encodedRows)} encoded rows · includes NON and REPRINT`;
+          `${formatNumber(encodedRows)} matched sales rows`;
       }
 
       if (targetSub) {
-        const weightedText =
-          weighted == null ? "—" : formatPercentPrecise(weighted);
         targetSub.textContent =
-          `Official SLSAch% · average of ${formatNumber(branchCount)} branch rows · ` +
-          `company-weighted ${weightedText}`;
+          `Average of ${formatNumber(branchCount)} branch achievement rows`;
       }
 
       if (cacheNote) {

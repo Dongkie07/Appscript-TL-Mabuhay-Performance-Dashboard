@@ -5,10 +5,17 @@
  */
 
 function readDashboardSources_(spreadsheet) {
+  /*
+   * Read every reusable source once during a cold cache build. Monthly filters
+   * then reuse the normalized SLSAch% source instead of reading slsTGT again.
+   */
+  const sales = readSalesSource_(spreadsheet);
+
   return {
-    sales: readSalesSource_(spreadsheet),
+    sales: sales,
     expenses: readExpenseSource_(spreadsheet),
-    customers: readCustomerSource_(spreadsheet)
+    customers: readCustomerSource_(spreadsheet),
+    officialTargets: readOfficialTargetSource_(spreadsheet, sales)
   };
 }
 
@@ -29,7 +36,20 @@ function readSalesSource_(spreadsheet) {
     return createEmptySalesSource_();
   }
 
-  const dataRowCount = lastRow - 1;
+  /*
+   * Formula columns can make getLastRow() much larger than the actual encoded
+   * data. Column BB is the required transaction date, so use it to trim the
+   * three wide batch reads to real reporting rows only.
+   */
+  const dataRowCount = getActualDataRowCountByColumn_(
+    salesSheet,
+    54,
+    lastRow
+  );
+
+  if (dataRowCount < 1) {
+    return createEmptySalesSource_();
+  }
 
   // Each required source range is read exactly once per fresh source load.
   const coreValues = salesSheet
@@ -51,11 +71,15 @@ function readSalesSource_(spreadsheet) {
 }
 
 function validateSalesHeaders_(salesSheet) {
-  validateHeader_(salesSheet, 'BB1', 'TRANSACTION DATE');
-  validateHeader_(salesSheet, 'BC1', 'SOURCE');
-  validateHeader_(salesSheet, 'BF1', 'SERVICE');
-  validateHeader_(salesSheet, 'BH1', 'COUNTA');
-  validateHeader_(salesSheet, 'BI1', 'AMOUNT');
+  const headers = salesSheet
+    .getRange(1, 53, 1, 10)
+    .getDisplayValues()[0];
+
+  assertHeaderValue_(salesSheet, 'BB1', headers[1], 'TRANSACTION DATE');
+  assertHeaderValue_(salesSheet, 'BC1', headers[2], 'SOURCE');
+  assertHeaderValue_(salesSheet, 'BF1', headers[5], 'SERVICE');
+  assertHeaderValue_(salesSheet, 'BH1', headers[7], 'COUNTA');
+  assertHeaderValue_(salesSheet, 'BI1', headers[8], 'AMOUNT');
 }
 
 function createEmptySalesSource_() {
@@ -63,6 +87,7 @@ function createEmptySalesSource_() {
     rows: [],
     minDate: null,
     maxDate: null,
+    datedRowCount: 0,
     canonicalBranches: Object.create(null),
     regions: Object.create(null)
   };
@@ -75,36 +100,104 @@ function normalizeSalesRows_(
   sourceTimeZone
 ) {
   const salesSource = createEmptySalesSource_();
+  const dateCache = Object.create(null);
 
   for (let rowIndex = 0; rowIndex < inputValues.length; rowIndex += 1) {
     const salesRow = createSalesRow_(
       coreValues[rowIndex],
       capacityValues[rowIndex],
       inputValues[rowIndex],
-      sourceTimeZone
+      sourceTimeZone,
+      dateCache
     );
+
+    if (!salesRow) continue;
 
     salesSource.rows.push(salesRow);
     updateSalesDateRange_(salesSource, salesRow.date);
     registerCanonicalBranch_(salesSource, salesRow);
   }
 
+  /*
+   * Date-sorted rows let filtered reports use binary-search boundaries instead
+   * of inspecting years of records for every selected period. Rows without a
+   * transaction date stay at the end because the monthly-target logic may
+   * still need their year/month/branch fields.
+   */
+  salesSource.rows.sort(compareSalesRowsByDate_);
+  salesSource.datedRowCount = countLeadingDatedSalesRows_(salesSource.rows);
+
   return salesSource;
+}
+
+function compareSalesRowsByDate_(firstRow, secondRow) {
+  const firstTime = firstRow.date instanceof Date
+    ? firstRow.date.getTime()
+    : Number.POSITIVE_INFINITY;
+  const secondTime = secondRow.date instanceof Date
+    ? secondRow.date.getTime()
+    : Number.POSITIVE_INFINITY;
+
+  return firstTime - secondTime;
+}
+
+function countLeadingDatedSalesRows_(rows) {
+  let count = 0;
+
+  while (
+    count < rows.length &&
+    rows[count].date instanceof Date &&
+    !isNaN(rows[count].date.getTime())
+  ) {
+    count += 1;
+  }
+
+  return count;
 }
 
 function createSalesRow_(
   coreRow,
   capacityRow,
   inputRow,
-  sourceTimeZone
+  sourceTimeZone,
+  dateCache
 ) {
-  const transactionDate = asSheetDate_(
+  const transactionDate = asSheetDateCached_(
     inputRow[1],
-    sourceTimeZone
+    sourceTimeZone,
+    dateCache
   );
   const branchName = cleanText_(
     inputRow[2] || coreRow[7] || inputRow[0]
   );
+  const target = nonNegativeNumber_(coreRow[11]);
+  const transactions = nonNegativeNumber_(inputRow[7]);
+  const amount = numberOrZero_(inputRow[8]);
+  const tdcAllocated = nullableNonNegativeNumber_(capacityRow[0]);
+  const tdcUsed = nullableNonNegativeNumber_(capacityRow[1]);
+  const pdcAllocated = nullableNonNegativeNumber_(capacityRow[10]);
+  const pdcUsed = nullableNonNegativeNumber_(capacityRow[11]);
+  const hasCapacity =
+    tdcAllocated !== null ||
+    tdcUsed !== null ||
+    pdcAllocated !== null ||
+    pdcUsed !== null;
+
+  /*
+   * Formula-filled source tabs can report a much larger last row than the
+   * number of real records. Do not serialize completely empty formula rows.
+   */
+  if (
+    !transactionDate &&
+    !branchName &&
+    target === 0 &&
+    transactions === 0 &&
+    amount === 0 &&
+    !hasCapacity
+  ) {
+    return null;
+  }
+
   const year =
     positiveInteger_(coreRow[0]) ||
     yearFromDate_(transactionDate);
@@ -123,13 +216,13 @@ function createSalesRow_(
     serviceGroup: normalizeServiceGroup_(
       coreRow[3] || inputRow[5]
     ),
-    target: nonNegativeNumber_(coreRow[11]),
-    transactions: nonNegativeNumber_(inputRow[7]),
-    amount: numberOrZero_(inputRow[8]),
-    tdcAllocated: nullableNonNegativeNumber_(capacityRow[0]),
-    tdcUsed: nullableNonNegativeNumber_(capacityRow[1]),
-    pdcAllocated: nullableNonNegativeNumber_(capacityRow[10]),
-    pdcUsed: nullableNonNegativeNumber_(capacityRow[11])
+    target: target,
+    transactions: transactions,
+    amount: amount,
+    tdcAllocated: tdcAllocated,
+    tdcUsed: tdcUsed,
+    pdcAllocated: pdcAllocated,
+    pdcUsed: pdcUsed
   };
 }
 
@@ -168,6 +261,134 @@ function isUnspecifiedRegion_(region) {
   return !region || region === 'Unspecified';
 }
 
+/**
+ * Reads the normalized source behind the SLSAch% pivot.
+ *
+ * The dashboard intentionally uses the pivot's authoritative fields:
+ *   N = monthly target
+ *   P = actual collections
+ *   Q = branch achievement percentage
+ *
+ * The compact rows are stored in the shared source cache so changing filters
+ * does not trigger another wide slsTGT read.
+ */
+function readOfficialTargetSource_(spreadsheet, salesSource) {
+  const targetSheet = findOfficialTargetSheet_(spreadsheet);
+
+  if (!targetSheet || targetSheet.getLastRow() < 2) {
+    return {
+      source: 'slsTGT',
+      rows: []
+    };
+  }
+
+  const dataRowCount = getActualDataRowCountByColumn_(
+    targetSheet,
+    1,
+    targetSheet.getLastRow()
+  );
+
+  if (dataRowCount < 1) {
+    return {
+      source: targetSheet.getName(),
+      rows: []
+    };
+  }
+
+  const values = targetSheet
+    .getRange(2, 1, dataRowCount, 17)
+    .getValues();
+  const rows = [];
+
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    const sourceRow = values[rowIndex];
+    const year = positiveInteger_(sourceRow[0]);
+    const month = positiveInteger_(sourceRow[1]);
+    const branchName = cleanText_(sourceRow[5]);
+    const branchKey = normalizeKey_(branchName);
+
+    if (!year || !month || !branchKey) {
+      continue;
+    }
+
+    const canonical =
+      salesSource &&
+      salesSource.canonicalBranches &&
+      salesSource.canonicalBranches[branchKey];
+
+    rows.push({
+      year: year,
+      month: month,
+      period: year * 100 + month,
+      region:
+        normalizeRegion_(sourceRow[3]) ||
+        (canonical && canonical.region
+          ? canonical.region
+          : 'Unspecified'),
+      branchName: branchName,
+      branchKey: branchKey,
+      target: nonNegativeNumber_(sourceRow[13]),
+      actual: nonNegativeNumber_(sourceRow[15]),
+      achievement: nullableNumericSourceValue_(sourceRow[16])
+    });
+  }
+
+  rows.sort(function sortOfficialRows(first, second) {
+    if (first.period !== second.period) {
+      return first.period - second.period;
+    }
+
+    return first.branchName.localeCompare(second.branchName);
+  });
+
+  return {
+    source: targetSheet.getName(),
+    rows: rows
+  };
+}
+
+function findOfficialTargetSheet_(spreadsheet) {
+  const preferredNames = [
+    DASHBOARD_CONFIG.TARGET_SHEET,
+    'slsTGT',
+    ' slsTGT'
+  ].filter(Boolean);
+
+  for (let index = 0; index < preferredNames.length; index += 1) {
+    const exactSheet = spreadsheet.getSheetByName(preferredNames[index]);
+
+    if (exactSheet) {
+      return exactSheet;
+    }
+  }
+
+  const sheets = spreadsheet.getSheets();
+
+  for (let index = 0; index < sheets.length; index += 1) {
+    if (
+      sheets[index]
+        .getName()
+        .replace(/\s+/g, '')
+        .toLowerCase() === 'slstgt'
+    ) {
+      return sheets[index];
+    }
+  }
+
+  return null;
+}
+
+function nullableNumericSourceValue_(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+
 function readExpenseSource_(spreadsheet) {
   const sourceTimeZone =
     spreadsheet.getSpreadsheetTimeZone() ||
@@ -177,37 +398,63 @@ function readExpenseSource_(spreadsheet) {
     DASHBOARD_CONFIG.EXPENSE_SHEET
   );
 
-  validateHeader_(expenseSheet, 'E1', 'BRANCH');
-  validateHeader_(expenseSheet, 'F1', 'DISBURSED DATE');
-  validateHeader_(expenseSheet, 'J1', 'EXPENSE');
+  const expenseHeaders = expenseSheet
+    .getRange(1, 4, 1, 9)
+    .getDisplayValues()[0];
+  assertHeaderValue_(expenseSheet, 'E1', expenseHeaders[1], 'BRANCH');
+  assertHeaderValue_(expenseSheet, 'F1', expenseHeaders[2], 'DISBURSED DATE');
+  assertHeaderValue_(expenseSheet, 'J1', expenseHeaders[6], 'EXPENSE');
 
   const lastRow = expenseSheet.getLastRow();
   if (lastRow < 2) return { rows: [] };
 
+  const dataRowCount = getActualDataRowCountByColumn_(
+    expenseSheet,
+    6,
+    lastRow
+  );
+  if (dataRowCount < 1) return { rows: [] };
+
   const values = expenseSheet
-    .getRange(2, 4, lastRow - 1, 9)
+    .getRange(2, 4, dataRowCount, 9)
     .getValues();
   const rows = [];
+  const dateCache = Object.create(null);
 
   for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
-    rows.push(createExpenseRow_(values[rowIndex], sourceTimeZone));
+    const row = createExpenseRow_(
+      values[rowIndex],
+      sourceTimeZone,
+      dateCache
+    );
+
+    if (row) rows.push(row);
   }
 
   return { rows: rows };
 }
 
-function createExpenseRow_(sourceRow, sourceTimeZone) {
+function createExpenseRow_(sourceRow, sourceTimeZone, dateCache) {
   const branchName = cleanText_(sourceRow[1]);
+  const date = asSheetDateCached_(
+    sourceRow[2],
+    sourceTimeZone,
+    dateCache
+  );
+  const amount = numberOrZero_(sourceRow[6]);
+  const expenseType = cleanText_(sourceRow[8] || sourceRow[7]);
+
+  if (!branchName && !date && amount === 0 && !expenseType) {
+    return null;
+  }
 
   return {
     region: normalizeRegion_(sourceRow[0]),
     branchName: branchName,
     branchKey: normalizeKey_(branchName),
-    date: asSheetDate_(sourceRow[2], sourceTimeZone),
-    amount: numberOrZero_(sourceRow[6]),
-    expenseType:
-      cleanText_(sourceRow[8] || sourceRow[7]) ||
-      'Unclassified'
+    date: date,
+    amount: amount,
+    expenseType: expenseType || 'Unclassified'
   };
 }
 
@@ -220,37 +467,63 @@ function readCustomerSource_(spreadsheet) {
     DASHBOARD_CONFIG.CUSTOMER_SHEET
   );
 
-  validateHeader_(customerSheet, 'E1', 'BRANCH');
-  validateHeader_(customerSheet, 'F1', 'TRANSACTION DATE');
-  validateHeader_(customerSheet, 'I1', 'COUNTA');
+  const customerHeaders = customerSheet
+    .getRange(1, 4, 1, 8)
+    .getDisplayValues()[0];
+  assertHeaderValue_(customerSheet, 'E1', customerHeaders[1], 'BRANCH');
+  assertHeaderValue_(customerSheet, 'F1', customerHeaders[2], 'TRANSACTION DATE');
+  assertHeaderValue_(customerSheet, 'I1', customerHeaders[5], 'COUNTA');
 
   const lastRow = customerSheet.getLastRow();
   if (lastRow < 2) return { rows: [] };
 
+  const dataRowCount = getActualDataRowCountByColumn_(
+    customerSheet,
+    6,
+    lastRow
+  );
+  if (dataRowCount < 1) return { rows: [] };
+
   const values = customerSheet
-    .getRange(2, 4, lastRow - 1, 8)
+    .getRange(2, 4, dataRowCount, 8)
     .getValues();
   const rows = [];
+  const dateCache = Object.create(null);
 
   for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
-    rows.push(createCustomerRow_(values[rowIndex], sourceTimeZone));
+    const row = createCustomerRow_(
+      values[rowIndex],
+      sourceTimeZone,
+      dateCache
+    );
+
+    if (row) rows.push(row);
   }
 
   return { rows: rows };
 }
 
-function createCustomerRow_(sourceRow, sourceTimeZone) {
+function createCustomerRow_(sourceRow, sourceTimeZone, dateCache) {
   const branchName = cleanText_(sourceRow[1]);
+  const date = asSheetDateCached_(
+    sourceRow[2],
+    sourceTimeZone,
+    dateCache
+  );
+  const customerCount = nonNegativeNumber_(sourceRow[5]);
+  const rawCustomerType = sourceRow[7] || sourceRow[3];
+
+  if (!branchName && !date && customerCount === 0 && !cleanText_(rawCustomerType)) {
+    return null;
+  }
 
   return {
     region: normalizeRegion_(sourceRow[0]),
     branchName: branchName,
     branchKey: normalizeKey_(branchName),
-    date: asSheetDate_(sourceRow[2], sourceTimeZone),
-    customerCount: nonNegativeNumber_(sourceRow[5]),
-    customerType: normalizeCustomerType_(
-      sourceRow[7] || sourceRow[3]
-    )
+    date: date,
+    customerCount: customerCount,
+    customerType: normalizeCustomerType_(rawCustomerType)
   };
 }
 
@@ -282,10 +555,35 @@ function requireSheet_(spreadsheet, sheetName) {
   );
 }
 
-function validateHeader_(sheet, cellReference, expectedText) {
-  const actualHeader = cleanText_(
-    sheet.getRange(cellReference).getDisplayValue()
-  ).toUpperCase();
+/**
+ * Returns the number of real data rows based on one required column. This
+ * prevents formula-filled helper columns from forcing very large batch reads.
+ */
+function getActualDataRowCountByColumn_(sheet, columnNumber, sheetLastRow) {
+  const candidateCount = Math.max(0, Number(sheetLastRow) - 1);
+
+  if (candidateCount < 1) return 0;
+
+  const values = sheet
+    .getRange(2, columnNumber, candidateCount, 1)
+    .getValues();
+
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = values[index][0];
+
+    if (
+      value instanceof Date ||
+      (value !== null && value !== undefined && String(value).trim() !== '')
+    ) {
+      return index + 1;
+    }
+  }
+
+  return 0;
+}
+
+function assertHeaderValue_(sheet, cellReference, actualValue, expectedText) {
+  const actualHeader = cleanText_(actualValue).toUpperCase();
   const expectedHeader = expectedText.toUpperCase();
 
   if (actualHeader.indexOf(expectedHeader) !== -1) return;
@@ -295,6 +593,34 @@ function validateHeader_(sheet, cellReference, expectedText) {
     cellReference + '. Expected a header containing "' +
     expectedText + '", but found "' + actualHeader + '".'
   );
+}
+
+function validateHeader_(sheet, cellReference, expectedText) {
+  assertHeaderValue_(
+    sheet,
+    cellReference,
+    sheet.getRange(cellReference).getDisplayValue(),
+    expectedText
+  );
+}
+
+function asSheetDateCached_(value, sourceTimeZone, dateCache) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const cache = dateCache || Object.create(null);
+  const cacheKey = value instanceof Date
+    ? 'D|' + value.getTime()
+    : 'V|' + String(value);
+
+  if (Object.prototype.hasOwnProperty.call(cache, cacheKey)) {
+    return cache[cacheKey];
+  }
+
+  const normalized = asSheetDate_(value, sourceTimeZone);
+  cache[cacheKey] = normalized;
+  return normalized;
 }
 
 function asSheetDate_(value, sourceTimeZone) {
