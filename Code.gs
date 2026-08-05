@@ -13,7 +13,7 @@ function doGet() {
  * Includes an HTML file inside Index.html.
  *
  * MonthlySalesFeature is appended automatically after JavaScript.html,
- * so Index.html does not need to be edited.
+ * so Index.html does not need to be changed.
  */
 function include(fileName) {
   let content = HtmlService
@@ -32,8 +32,8 @@ function include(fileName) {
 /**
  * Main dashboard endpoint.
  *
- * Uses the corrected dashboard builder so monthly sales targets follow
- * the selected reporting month or selected multi-month date range.
+ * The normal dashboard response is built first. Its monthly targets are then
+ * replaced using the authoritative branch targets from the " slsTGT" tab.
  */
 function getDashboardData(requestedFilters) {
   return buildDashboardDataWithMonthlyTargetFix_(

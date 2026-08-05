@@ -1,411 +1,204 @@
 /**
- * Corrected overview dashboard builder.
+ * Code-only monthly target correction.
  *
- * This file intentionally leaves DashboardService.gs unchanged. Code.gs calls
- * this builder instead of the old buildDashboardData_ function.
+ * The employee encoding sheets are not changed. The dashboard continues to
+ * use CATEGORY OF SALES V2 for actual sales, transactions and branch identity,
+ * but monthly targets are read directly from the existing " slsTGT" tab:
+ *
+ *   A = Year
+ *   B = Month
+ *   D = Region
+ *   F = Branch Name
+ *   N = Final Monthly Target (Gross Collection)
+ *
+ * One target is kept per branch/month. If duplicate target rows exist, the
+ * largest target for that branch/month is used rather than double-counting it.
  */
 function buildDashboardDataWithMonthlyTargetFix_(requestedFilters) {
-  const processingStartedAt = Date.now();
-  const spreadsheet = getSpreadsheet_();
-  const timezone =
-    spreadsheet.getSpreadsheetTimeZone() ||
-    Session.getScriptTimeZone();
-  const forceRefresh =
-    requestedFilters &&
-    requestedFilters.forceRefresh === true;
-  const sourceResult = getDashboardSourcesCached_(
-    spreadsheet,
-    forceRefresh
-  );
-  const sources = sourceResult.sources;
+  const response = buildDashboardData_(requestedFilters || {});
 
-  assertSalesDatesExist_(sources.sales);
-
-  const filters = normalizeFilters_(
-    requestedFilters || {},
-    sources.sales.minDate,
-    sources.sales.maxDate
-  );
-
-  // Use a new cache namespace so the old ₱49.1M June result cannot be
-  // returned after the source formula is corrected back to BA (collection branch).
-  const cacheViewKey = 'OVERVIEW_MONTHLY_TARGET_FIX_V3';
-  const cachedResponse = forceRefresh
-    ? null
-    : readDashboardResultCache_(
-        spreadsheet,
-        sourceResult,
-        filters,
-        cacheViewKey
-      );
-
-  if (cachedResponse) {
-    return prepareCachedDashboardResponse_(
-      cachedResponse,
-      sourceResult,
-      timezone,
-      processingStartedAt
-    );
-  }
-
-  const trendBucketMode = chooseTrendBucket_(
-    filters.startDate,
-    filters.endDate
-  );
-  const aggregation = createAggregationState_(
-    trendBucketMode
-  );
-
-  // Keep every official branch in the dashboard, including branches with
-  // zero sales during the selected period.
-  initializeCanonicalBranches_(
-    aggregation.branchTotals,
-    sources.sales.canonicalBranches
-  );
-
-  // Capture only targets whose month belongs to the selected date range.
-  aggregateMonthlyTargetsFixed_(
-    sources.sales,
-    filters,
-    aggregation
-  );
-
-  aggregateSalesRows_(
-    sources.sales,
-    filters,
-    timezone,
-    aggregation
-  );
-
-  applyMonthlyTargets_(aggregation);
-  applyOverviewCapacity_(aggregation);
-
-  aggregateExpenseRows_(
-    sources.expenses,
-    sources.sales.canonicalBranches,
-    filters,
-    aggregation
-  );
-
-  aggregateCustomerRows_(
-    sources.customers,
-    sources.sales.canonicalBranches,
-    filters,
-    aggregation
-  );
-
-  const branchSummaries = buildBranchSummaries_(
-    aggregation.branchTotals
-  );
-
-  // Column J is the authoritative company monthly target in the source Sheet.
-  // For an All regions / All branches request, reconcile any missing branch
-  // target so the dashboard grand total matches the Sheet monthly total.
-  const targetReconciliation = reconcileCompanyMonthlyTarget_(
-    spreadsheet,
-    filters,
-    branchSummaries
-  );
-
-  const dashboardTotals = calculateDashboardTotals_(
-    branchSummaries
-  );
-
-  const response = buildDashboardResponse_({
-    spreadsheet: spreadsheet,
-    timezone: timezone,
-    processingStartedAt: processingStartedAt,
-    sourceResult: sourceResult,
-    filters: filters,
-    sources: sources,
-    aggregation: aggregation,
-    branchSummaries: branchSummaries,
-    dashboardTotals: dashboardTotals
-  });
-
-  response.meta.resultCacheStatus = 'MISS';
-  response.health.targetReconciliation = targetReconciliation;
-
-  try {
-    writeDashboardResultCache_(
-      spreadsheet,
-      sourceResult,
-      filters,
-      cacheViewKey,
-      response
-    );
-  } catch (cacheError) {
-    console.warn(
-      'Dashboard filtered result cache write failed: ' +
-      cacheError
-    );
-  }
+  applyDirectMonthlyTargetsToResponse_(response);
 
   return response;
 }
 
 /**
- * Records one target per branch and month, but only for months contained in
- * the selected reporting period.
- *
- * Examples:
- * - July 1 to July 31: July target only.
- * - June 1 to July 31: June target plus July target.
+ * Replaces every target value in the dashboard response with the matching
+ * value from the direct target source.
  */
-function aggregateMonthlyTargetsFixed_(
-  salesSource,
-  filters,
-  aggregation
-) {
-  const selectedRegion =
-    filters && filters.region
-      ? filters.region
-      : 'ALL';
-  const selectedBranch =
-    filters && filters.branch
-      ? filters.branch
-      : 'ALL';
+function applyDirectMonthlyTargetsToResponse_(response) {
+  if (!response || !response.filtersApplied) {
+    throw new Error(
+      'The dashboard response did not contain normalized filters.'
+    );
+  }
+
+  const spreadsheet = getSpreadsheet_();
+  const targetResult = readDirectMonthlyTargets_(
+    spreadsheet,
+    response.filtersApplied
+  );
+  const branches = Array.isArray(response.branches)
+    ? response.branches
+    : [];
+  const existingBranches = Object.create(null);
 
   for (
-    let rowIndex = 0;
-    rowIndex < salesSource.rows.length;
-    rowIndex += 1
+    let branchIndex = 0;
+    branchIndex < branches.length;
+    branchIndex += 1
   ) {
-    const row = salesSource.rows[rowIndex];
+    const branch = branches[branchIndex];
+    const branchKey = directTargetNormalizeKey_(
+      branch.branchKey || branch.branchName
+    );
+    const targetRecord = targetResult.selectedBranches[branchKey];
+    const target = targetRecord
+      ? targetRecord.target
+      : 0;
+
+    branch.branchKey = branchKey;
+    branch.target = directTargetRound2_(target);
+    branch.targetAchievement = directTargetPercentage_(
+      branch.sales,
+      branch.target
+    );
+    existingBranches[branchKey] = true;
+  }
+
+  // Include branches that have an official target but have no matching sales
+  // row yet. They appear with zero actual sales instead of disappearing from
+  // the company or regional monthly total.
+  const targetBranchKeys = Object.keys(
+    targetResult.selectedBranches
+  );
+
+  for (
+    let targetIndex = 0;
+    targetIndex < targetBranchKeys.length;
+    targetIndex += 1
+  ) {
+    const branchKey = targetBranchKeys[targetIndex];
+    const targetRecord =
+      targetResult.selectedBranches[branchKey];
 
     if (
-      !row.branchKey ||
-      Number(row.target || 0) <= 0 ||
-      !row.year ||
-      !row.month
+      existingBranches[branchKey] ||
+      targetRecord.target <= 0
     ) {
       continue;
     }
 
-    if (
-      !isTargetMonthInsideFilter_(
-        row.year,
-        row.month,
-        filters
-      )
-    ) {
-      continue;
-    }
-
-    const branchIdentity = resolveBranchIdentity_(
-      row,
-      salesSource.canonicalBranches
-    );
-
-    if (
-      selectedRegion !== 'ALL' &&
-      branchIdentity.region !== selectedRegion
-    ) {
-      continue;
-    }
-
-    if (
-      selectedBranch !== 'ALL' &&
-      row.branchKey !== selectedBranch
-    ) {
-      continue;
-    }
-
-    recordMonthlyTarget_(
-      aggregation.monthlyTargets,
-      row,
-      branchIdentity
-    );
-  }
-}
-
-/**
- * Checks whether a YYYY-MM target period falls inside the selected date range.
- */
-function isTargetMonthInsideFilter_(year, month, filters) {
-  if (
-    !filters ||
-    !filters.startDate ||
-    !filters.endDate
-  ) {
-    return true;
-  }
-
-  const numericYear = Number(year);
-  const numericMonth = Number(month);
-
-  if (
-    !numericYear ||
-    numericMonth < 1 ||
-    numericMonth > 12
-  ) {
-    return false;
-  }
-
-  const targetMonthKey =
-    numericYear * 100 + numericMonth;
-  const startMonthKey = toYearMonthKey_(
-    filters.startDate
-  );
-  const endMonthKey = toYearMonthKey_(
-    filters.endDate
-  );
-
-  if (!startMonthKey || !endMonthKey) {
-    return true;
-  }
-
-  return (
-    targetMonthKey >= startMonthKey &&
-    targetMonthKey <= endMonthKey
-  );
-}
-
-/**
- * Converts a Date or a YYYY-MM-DD string to an integer such as 202607.
- */
-function toYearMonthKey_(dateInput) {
-  if (!dateInput) {
-    return null;
-  }
-
-  if (
-    dateInput instanceof Date ||
-    typeof dateInput.getMonth === 'function'
-  ) {
-    return (
-      dateInput.getFullYear() * 100 +
-      (dateInput.getMonth() + 1)
+    branches.push(
+      createDirectTargetOnlyBranch_(targetRecord)
     );
   }
 
-  const dateText = String(dateInput).trim();
-  const parts = dateText.split(/[-/]/);
+  branches.sort(compareDirectTargetBranches_);
+  response.branches = branches;
 
-  if (parts.length >= 2) {
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-
-    if (
-      year &&
-      month >= 1 &&
-      month <= 12
-    ) {
-      return year * 100 + month;
-    }
-  }
-
-  const parsedDate = new Date(dateText);
-
-  if (!isNaN(parsedDate.getTime())) {
-    return (
-      parsedDate.getFullYear() * 100 +
-      (parsedDate.getMonth() + 1)
+  response.kpis = response.kpis || {};
+  response.kpis.target = directTargetRound2_(
+    targetResult.selectedTarget
+  );
+  response.kpis.targetAchievement =
+    directTargetPercentage_(
+      response.kpis.sales,
+      response.kpis.target
     );
-  }
 
-  return null;
-}
+  updateDirectTargetTopBranchChart_(response);
+  addDirectTargetOptions_(response, targetResult.periodBranches);
 
-/**
- * Reconciles the branch-target total to the authoritative company target in
- * CATEGORY OF SALES V2 column J. This applies only when no region or branch
- * filter is selected.
- *
- * A positive difference is shown as an explicit "Unallocated monthly target"
- * row, rather than silently assigning the missing target to the wrong branch.
- */
-function reconcileCompanyMonthlyTarget_(
-  spreadsheet,
-  filters,
-  branchSummaries
-) {
-  const selectedRegion = filters && filters.region
-    ? filters.region
-    : 'ALL';
-  const selectedBranch = filters && filters.branch
-    ? filters.branch
-    : 'ALL';
-
-  if (selectedRegion !== 'ALL' || selectedBranch !== 'ALL') {
-    return {
-      applied: false,
-      authoritativeTarget: null,
-      branchTargetTotal: null,
-      difference: 0
-    };
-  }
-
-  const authoritativeTarget = readCompanyMonthlyTarget_(
-    spreadsheet,
-    filters
-  );
-  const branchTargetTotal = branchSummaries.reduce(
-    function(total, branch) {
-      return total + Number(branch.target || 0);
-    },
-    0
-  );
-  const difference = round2_(
-    authoritativeTarget - branchTargetTotal
-  );
-
-  if (authoritativeTarget <= 0 || difference <= 0.5) {
-    return {
-      applied: false,
-      authoritativeTarget: round2_(authoritativeTarget),
-      branchTargetTotal: round2_(branchTargetTotal),
-      difference: difference
-    };
-  }
-
-  branchSummaries.push(
-    createTargetReconciliationBranch_(difference)
-  );
-
-  return {
-    applied: true,
-    authoritativeTarget: round2_(authoritativeTarget),
-    branchTargetTotal: round2_(branchTargetTotal),
-    difference: difference
+  response.health = response.health || {};
+  response.health.branchesMatched = branches.length;
+  response.health.monthlyTargetSource = {
+    sheet: targetResult.sheetName,
+    range: 'A:N',
+    yearColumn: 'A',
+    monthColumn: 'B',
+    regionColumn: 'D',
+    branchColumn: 'F',
+    targetColumn: 'N',
+    rowsRead: targetResult.rowsRead,
+    uniqueBranchMonthsMatched:
+      targetResult.uniqueBranchMonthsMatched,
+    selectedTarget: directTargetRound2_(
+      targetResult.selectedTarget
+    ),
+    periodStartMonth: targetResult.startMonthKey,
+    periodEndMonth: targetResult.endMonthKey
   };
 }
 
 /**
- * Reads the company target from column J, keeping one maximum value per month
- * and summing only months inside the selected filter range.
+ * Reads target rows once and prepares:
+ *
+ * periodBranches   = all target branches inside the selected month range,
+ *                    used to keep branch/region options complete.
+ * selectedBranches = the same rows after applying region and branch filters.
  */
-function readCompanyMonthlyTarget_(spreadsheet, filters) {
-  const sheet = spreadsheet.getSheetByName(
-    DASHBOARD_CONFIG.SALES_SHEET
+function readDirectMonthlyTargets_(spreadsheet, filtersApplied) {
+  const targetSheet = getDirectMonthlyTargetSheet_(spreadsheet);
+  const lastRow = targetSheet.getLastRow();
+  const startMonthKey = directTargetYearMonthKey_(
+    filtersApplied.startDate
   );
+  const endMonthKey = directTargetYearMonthKey_(
+    filtersApplied.endDate
+  );
+  const selectedRegion = directTargetCleanText_(
+    filtersApplied.region
+  ) || 'ALL';
+  const selectedBranch = directTargetNormalizeKey_(
+    filtersApplied.branch
+  ) || 'ALL';
 
-  if (!sheet) {
-    return 0;
+  if (lastRow < 3) {
+    return {
+      sheetName: targetSheet.getName(),
+      rowsRead: 0,
+      uniqueBranchMonthsMatched: 0,
+      startMonthKey: startMonthKey,
+      endMonthKey: endMonthKey,
+      selectedTarget: 0,
+      periodBranches: Object.create(null),
+      selectedBranches: Object.create(null)
+    };
   }
 
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    return 0;
-  }
+  const values = targetSheet
+    .getRange(3, 1, lastRow - 2, 14)
+    .getValues();
+  const uniqueBranchMonths = Object.create(null);
 
-  const rowCount = lastRow - 1;
-  const periods = sheet.getRange(2, 1, rowCount, 2).getValues();
-  const targets = sheet.getRange(2, 10, rowCount, 1).getValues();
-  const monthlyTargets = {};
-  const startMonthKey = toYearMonthKey_(filters.startDate);
-  const endMonthKey = toYearMonthKey_(filters.endDate);
+  for (
+    let rowIndex = 0;
+    rowIndex < values.length;
+    rowIndex += 1
+  ) {
+    const row = values[rowIndex];
+    const year = Math.floor(directTargetNumber_(row[0]));
+    const month = Math.floor(directTargetNumber_(row[1]));
+    const branchName = directTargetCleanText_(row[5]);
+    const branchKey = directTargetNormalizeKey_(branchName);
+    const region = directTargetNormalizeRegion_(row[3]);
+    const target = Math.max(
+      0,
+      directTargetNumber_(row[13])
+    );
 
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    const year = Number(periods[rowIndex][0]);
-    const month = Number(periods[rowIndex][1]);
-    const target = Number(targets[rowIndex][0]) || 0;
-
-    if (!year || month < 1 || month > 12 || target <= 0) {
+    if (
+      !year ||
+      month < 1 ||
+      month > 12 ||
+      !branchKey
+    ) {
       continue;
     }
 
     const monthKey = year * 100 + month;
+
     if (
       (startMonthKey && monthKey < startMonthKey) ||
       (endMonthKey && monthKey > endMonthKey)
@@ -413,29 +206,205 @@ function readCompanyMonthlyTarget_(spreadsheet, filters) {
       continue;
     }
 
-    if (
-      !monthlyTargets[monthKey] ||
-      target > monthlyTargets[monthKey]
-    ) {
-      monthlyTargets[monthKey] = target;
+    const recordKey = monthKey + '|' + branchKey;
+    const savedRecord = uniqueBranchMonths[recordKey];
+
+    if (!savedRecord || target > savedRecord.target) {
+      uniqueBranchMonths[recordKey] = {
+        monthKey: monthKey,
+        branchKey: branchKey,
+        branchName: branchName,
+        region: region,
+        target: target
+      };
     }
   }
 
-  return Object.keys(monthlyTargets).reduce(
-    function(total, monthKey) {
-      return total + monthlyTargets[monthKey];
-    },
-    0
+  const periodBranches = Object.create(null);
+  const selectedBranches = Object.create(null);
+  const uniqueKeys = Object.keys(uniqueBranchMonths);
+  let selectedTarget = 0;
+  let uniqueBranchMonthsMatched = 0;
+
+  for (
+    let uniqueIndex = 0;
+    uniqueIndex < uniqueKeys.length;
+    uniqueIndex += 1
+  ) {
+    const record = uniqueBranchMonths[uniqueKeys[uniqueIndex]];
+
+    addDirectTargetRecord_(periodBranches, record);
+
+    const matchesRegion =
+      selectedRegion === 'ALL' ||
+      record.region === selectedRegion;
+    const matchesBranch =
+      selectedBranch === 'ALL' ||
+      record.branchKey === selectedBranch;
+
+    if (!matchesRegion || !matchesBranch) {
+      continue;
+    }
+
+    addDirectTargetRecord_(selectedBranches, record);
+    selectedTarget += record.target;
+    uniqueBranchMonthsMatched += 1;
+  }
+
+  return {
+    sheetName: targetSheet.getName(),
+    rowsRead: values.length,
+    uniqueBranchMonthsMatched: uniqueBranchMonthsMatched,
+    startMonthKey: startMonthKey,
+    endMonthKey: endMonthKey,
+    selectedTarget: directTargetRound2_(selectedTarget),
+    periodBranches: periodBranches,
+    selectedBranches: selectedBranches
+  };
+}
+
+function getDirectMonthlyTargetSheet_(spreadsheet) {
+  const exactName = ' slsTGT';
+  const fallbackName = 'slsTGT';
+  const sheet =
+    spreadsheet.getSheetByName(exactName) ||
+    spreadsheet.getSheetByName(fallbackName);
+
+  if (sheet) {
+    return sheet;
+  }
+
+  throw new Error(
+    'Monthly target tab not found. Expected a Sheet named " slsTGT".'
   );
 }
 
-function createTargetReconciliationBranch_(difference) {
+function addDirectTargetRecord_(branchMap, record) {
+  let branch = branchMap[record.branchKey];
+
+  if (!branch) {
+    branch = {
+      branchKey: record.branchKey,
+      branchName: record.branchName,
+      region: record.region,
+      target: 0,
+      monthKeys: []
+    };
+    branchMap[record.branchKey] = branch;
+  }
+
+  branch.target += record.target;
+  branch.monthKeys.push(record.monthKey);
+}
+
+/**
+ * Adds target-only branches to filter options without duplicating branches
+ * that are already supplied by CATEGORY OF SALES V2.
+ */
+function addDirectTargetOptions_(response, periodBranches) {
+  response.options = response.options || {
+    regions: [],
+    branches: []
+  };
+  response.options.regions = Array.isArray(
+    response.options.regions
+  )
+    ? response.options.regions
+    : [];
+  response.options.branches = Array.isArray(
+    response.options.branches
+  )
+    ? response.options.branches
+    : [];
+
+  const savedRegions = Object.create(null);
+  const savedBranches = Object.create(null);
+
+  for (
+    let regionIndex = 0;
+    regionIndex < response.options.regions.length;
+    regionIndex += 1
+  ) {
+    savedRegions[
+      response.options.regions[regionIndex]
+    ] = true;
+  }
+
+  for (
+    let branchIndex = 0;
+    branchIndex < response.options.branches.length;
+    branchIndex += 1
+  ) {
+    const option = response.options.branches[branchIndex];
+    savedBranches[
+      directTargetNormalizeKey_(
+        option.branchKey || option.branchName
+      )
+    ] = true;
+  }
+
+  const targetBranchKeys = Object.keys(periodBranches);
+
+  for (
+    let targetIndex = 0;
+    targetIndex < targetBranchKeys.length;
+    targetIndex += 1
+  ) {
+    const targetBranch =
+      periodBranches[targetBranchKeys[targetIndex]];
+
+    if (!savedRegions[targetBranch.region]) {
+      response.options.regions.push(targetBranch.region);
+      savedRegions[targetBranch.region] = true;
+    }
+
+    if (
+      targetBranch.target > 0 &&
+      !savedBranches[targetBranch.branchKey]
+    ) {
+      response.options.branches.push({
+        branchKey: targetBranch.branchKey,
+        branchName: targetBranch.branchName,
+        region: targetBranch.region
+      });
+      savedBranches[targetBranch.branchKey] = true;
+    }
+  }
+
+  response.options.regions.sort(compareDirectTargetRegions_);
+  response.options.branches.sort(
+    function sortDirectTargetOptions(first, second) {
+      return String(first.branchName || '').localeCompare(
+        String(second.branchName || '')
+      );
+    }
+  );
+}
+
+function updateDirectTargetTopBranchChart_(response) {
+  response.charts = response.charts || {};
+  const branches = Array.isArray(response.branches)
+    ? response.branches.slice(0, 10)
+    : [];
+
+  response.charts.topBranches = branches.map(
+    function mapDirectTargetTopBranch(branch) {
+      return {
+        label: branch.branchName,
+        value: directTargetRound2_(branch.sales),
+        target: directTargetRound2_(branch.target)
+      };
+    }
+  );
+}
+
+function createDirectTargetOnlyBranch_(targetRecord) {
   return {
-    branchKey: 'TARGET_RECONCILIATION',
-    branchName: 'Unallocated monthly target',
-    region: 'Target reconciliation',
+    branchKey: targetRecord.branchKey,
+    branchName: targetRecord.branchName,
+    region: targetRecord.region,
     sales: 0,
-    target: round2_(difference),
+    target: directTargetRound2_(targetRecord.target),
     targetAchievement: 0,
     transactions: 0,
     averageTicket: 0,
@@ -447,21 +416,13 @@ function createTargetReconciliationBranch_(difference) {
     tdcPreviousAllocated: null,
     tdcPreviousUsed: null,
     tdcUtilization: null,
-    tdcTrend: {
-      status: 'INSUFFICIENT_DATA',
-      changePercentagePoints: null,
-      previousUtilization: null
-    },
+    tdcTrend: createDirectTargetEmptyTrend_(),
     pdcAllocated: null,
     pdcUsed: null,
     pdcPreviousAllocated: null,
     pdcPreviousUsed: null,
     pdcUtilization: null,
-    pdcTrend: {
-      status: 'INSUFFICIENT_DATA',
-      changePercentagePoints: null,
-      previousUtilization: null
-    },
+    pdcTrend: createDirectTargetEmptyTrend_(),
     capacityPeriod: '',
     previousCapacityPeriod: '',
     tdcCapacityPeriod: '',
@@ -471,3 +432,165 @@ function createTargetReconciliationBranch_(difference) {
   };
 }
 
+function createDirectTargetEmptyTrend_() {
+  return {
+    status: 'INSUFFICIENT_DATA',
+    changePercentagePoints: null,
+    previousUtilization: null
+  };
+}
+
+function compareDirectTargetBranches_(firstBranch, secondBranch) {
+  const salesDifference =
+    directTargetNumber_(secondBranch.sales) -
+    directTargetNumber_(firstBranch.sales);
+
+  if (salesDifference !== 0) {
+    return salesDifference;
+  }
+
+  return String(firstBranch.branchName || '').localeCompare(
+    String(secondBranch.branchName || '')
+  );
+}
+
+function compareDirectTargetRegions_(firstRegion, secondRegion) {
+  if (firstRegion === 'NIR') {
+    return -1;
+  }
+
+  if (secondRegion === 'NIR') {
+    return 1;
+  }
+
+  const firstNumberMatch = String(firstRegion).match(/\d+/);
+  const secondNumberMatch = String(secondRegion).match(/\d+/);
+  const firstNumber = firstNumberMatch
+    ? Number(firstNumberMatch[0])
+    : 999;
+  const secondNumber = secondNumberMatch
+    ? Number(secondNumberMatch[0])
+    : 999;
+
+  if (firstNumber !== secondNumber) {
+    return firstNumber - secondNumber;
+  }
+
+  return String(firstRegion).localeCompare(String(secondRegion));
+}
+
+function directTargetNormalizeRegion_(value) {
+  const cleaned = directTargetCleanText_(value);
+  const uppercase = cleaned.toUpperCase();
+
+  if (!uppercase) {
+    return 'Unspecified';
+  }
+
+  if (
+    uppercase === 'NIR' ||
+    uppercase.indexOf('NEGROS ISLAND') !== -1
+  ) {
+    return 'NIR';
+  }
+
+  const numberMatch = uppercase.match(/\d+/);
+
+  if (numberMatch) {
+    return 'Region ' + Number(numberMatch[0]);
+  }
+
+  return cleaned;
+}
+
+function directTargetNormalizeKey_(value) {
+  return directTargetCleanText_(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function directTargetCleanText_(value) {
+  const safeValue =
+    value === null || value === undefined
+      ? ''
+      : value;
+
+  return String(safeValue)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function directTargetNumber_(value) {
+  const normalized =
+    typeof value === 'string'
+      ? value.replace(/[₱,%\s,]/g, '')
+      : value;
+  const parsed = Number(normalized);
+
+  return isFinite(parsed) ? parsed : 0;
+}
+
+function directTargetRound2_(value) {
+  const number = directTargetNumber_(value);
+
+  return (
+    Math.round(
+      (number + Number.EPSILON) * 100
+    ) / 100
+  );
+}
+
+function directTargetPercentage_(numerator, denominator) {
+  const safeDenominator = directTargetNumber_(denominator);
+
+  if (safeDenominator <= 0) {
+    return null;
+  }
+
+  return directTargetRound2_(
+    directTargetNumber_(numerator) /
+      safeDenominator *
+      100
+  );
+}
+
+function directTargetYearMonthKey_(dateInput) {
+  if (!dateInput) {
+    return null;
+  }
+
+  if (
+    dateInput instanceof Date &&
+    !isNaN(dateInput.getTime())
+  ) {
+    return (
+      dateInput.getFullYear() * 100 +
+      dateInput.getMonth() +
+      1
+    );
+  }
+
+  const dateText = directTargetCleanText_(dateInput);
+  const match = dateText.match(/^(\d{4})-(\d{1,2})/);
+
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+
+    if (year && month >= 1 && month <= 12) {
+      return year * 100 + month;
+    }
+  }
+
+  const parsedDate = new Date(dateText);
+
+  if (!isNaN(parsedDate.getTime())) {
+    return (
+      parsedDate.getFullYear() * 100 +
+      parsedDate.getMonth() +
+      1
+    );
+  }
+
+  return null;
+}
