@@ -1,1057 +1,1680 @@
 <style>
-  .monthly-sales-view {
+  .executive-trend-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid #e6dcc8;
+    border-radius: 12px;
+    background: #fbf7ee;
+  }
+
+  .executive-trend-button {
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #536070;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 7px 10px;
+    text-transform: uppercase;
+  }
+
+  .executive-trend-button:hover {
+    background: #f2ead9;
+  }
+
+  .executive-trend-button.active {
+    background: #0b1f3a;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(11, 31, 58, 0.18);
+  }
+
+  .executive-reconciliation {
+    display: grid;
+    grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(145px, 1fr));
+    gap: 10px;
+    margin: 12px 0 0;
+  }
+
+  .executive-reconciliation-card {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid #e8dfd0;
+    border-radius: 14px;
+    display: flex;
+    justify-content: space-between;
+    min-height: 54px;
+    padding: 11px 14px;
+  }
+
+  .executive-reconciliation-card.rule {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .executive-reconciliation-card span {
+    color: #6e7785;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .executive-reconciliation-card strong {
+    color: #0b1f3a;
+    font-size: 14px;
+  }
+
+  .executive-reconciliation-card.rule strong {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .executive-reconciliation-card.excluded strong {
+    color: #9a5a00;
+  }
+
+  .executive-chart-tooltip {
+    background: #0b1f3a;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(11, 31, 58, 0.2);
+    color: #ffffff;
+    display: none;
+    min-width: 150px;
+    padding: 10px 12px;
+    pointer-events: none;
+    position: fixed;
+    z-index: 9999;
+  }
+
+  .executive-chart-tooltip.visible {
+    display: grid;
+    gap: 3px;
+  }
+
+  .executive-chart-tooltip span {
+    color: #dbe3ed;
+    font-size: 11px;
+  }
+
+  .executive-monthly-view {
     display: grid;
     gap: 16px;
   }
 
-  .monthly-sales-hero,
-  .monthly-sales-panel {
+  .executive-monthly-hero {
+    align-items: end;
     background: #ffffff;
-    border: 1px solid #e7dfcf;
-    border-radius: 16px;
-    box-shadow: 0 12px 30px rgba(11, 31, 58, 0.06);
-  }
-
-  .monthly-sales-hero {
-    padding: 18px;
-  }
-
-  .monthly-sales-heading {
-    align-items: flex-end;
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
     display: flex;
-    gap: 16px;
+    gap: 18px;
     justify-content: space-between;
-    margin-bottom: 16px;
+    padding: 18px 20px;
   }
 
-  .monthly-sales-heading h2 {
+  .executive-monthly-hero h2 {
     color: #0b1f3a;
-    font-size: 22px;
-    margin: 0 0 4px;
+    font-size: 20px;
+    margin: 0 0 5px;
   }
 
-  .monthly-sales-heading p {
-    color: #6f7d90;
+  .executive-monthly-hero p {
+    color: #6e7785;
+    font-size: 12px;
     margin: 0;
   }
 
-  .monthly-sales-controls {
-    align-items: end;
-    display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(190px, 260px) auto 1fr;
-  }
-
-  .monthly-sales-field {
+  .executive-month-field {
     display: grid;
     gap: 6px;
+    min-width: 190px;
   }
 
-  .monthly-sales-field label {
-    color: #516176;
-    font-size: 11px;
-    font-weight: 800;
+  .executive-month-field span {
+    color: #536070;
+    font-size: 10px;
+    font-weight: 900;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
-  .monthly-sales-field input {
-    background: #fff;
-    border: 1px solid #d8dfe8;
+  .executive-month-field input {
+    border: 1px solid #ded4c1;
     border-radius: 10px;
     color: #0b1f3a;
     font: inherit;
-    min-height: 42px;
-    padding: 8px 12px;
+    font-weight: 700;
+    padding: 10px 12px;
   }
 
-  .monthly-sales-note {
-    color: #6f7d90;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .monthly-sales-summary {
+  .executive-monthly-kpis {
     display: grid;
     gap: 12px;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-top: 16px;
   }
 
-  .monthly-sales-kpi {
-    background: #f8fafc;
-    border: 1px solid #e7ecf2;
-    border-radius: 12px;
-    padding: 14px;
+  .executive-monthly-kpi {
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
+    display: grid;
+    gap: 7px;
+    padding: 15px 17px;
   }
 
-  .monthly-sales-kpi span {
-    color: #6f7d90;
-    display: block;
-    font-size: 11px;
-    font-weight: 800;
+  .executive-monthly-kpi span {
+    color: #6e7785;
+    font-size: 10px;
+    font-weight: 900;
     letter-spacing: 0.07em;
-    margin-bottom: 7px;
     text-transform: uppercase;
   }
 
-  .monthly-sales-kpi strong {
+  .executive-monthly-kpi strong {
     color: #0b1f3a;
     font-size: 22px;
   }
 
-  .monthly-sales-panel {
+  .executive-monthly-regions {
+    display: grid;
+    gap: 10px;
+  }
+
+  .executive-region-card {
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
     overflow: hidden;
   }
 
-  .monthly-sales-toolbar {
+  .executive-region-card summary {
     align-items: center;
-    border-bottom: 1px solid #ece6db;
-    display: flex;
-    gap: 16px;
-    justify-content: space-between;
-    padding: 16px 18px;
+    cursor: pointer;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(160px, 1.4fr) repeat(4, minmax(100px, 1fr));
+    list-style: none;
+    padding: 14px 16px;
   }
 
-  .monthly-sales-toolbar h3 {
+  .executive-region-card summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .executive-region-card summary:hover {
+    background: #fbf7ee;
+  }
+
+  .executive-region-card summary span,
+  .executive-region-card summary strong {
+    min-width: 0;
+  }
+
+  .executive-region-card summary strong {
     color: #0b1f3a;
-    font-size: 17px;
-    margin: 0 0 3px;
   }
 
-  .monthly-sales-toolbar p {
-    color: #6f7d90;
+  .executive-region-card summary span {
+    color: #536070;
     font-size: 12px;
-    margin: 0;
-  }
-
-  .monthly-sales-table-wrap {
-    overflow-x: auto;
-  }
-
-  .monthly-sales-table {
-    border-collapse: collapse;
-    min-width: 900px;
-    width: 100%;
-  }
-
-  .monthly-sales-table th {
-    background: #0b1f3a;
-    color: #ffffff;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    padding: 11px 12px;
-    text-align: left;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .monthly-sales-table th.number,
-  .monthly-sales-table td.number {
     text-align: right;
   }
 
-  .monthly-sales-table td {
-    border-bottom: 1px solid #edf0f4;
-    color: #29394f;
-    padding: 10px 12px;
-    vertical-align: middle;
+  .executive-region-card table {
+    border-collapse: collapse;
+    width: 100%;
   }
 
-  .monthly-sales-region-row td {
-    background: #e9eef5;
-    color: #0b1f3a;
-    font-weight: 800;
-  }
-
-  .monthly-sales-branch-row td:first-child {
-    padding-left: 38px;
-  }
-
-  .monthly-sales-total-row td {
-    background: #dce8d7;
-    border-top: 2px solid #b8cdb0;
-    color: #0b1f3a;
-    font-weight: 900;
-  }
-
-  .monthly-sales-region-toggle {
-    align-items: center;
-    background: transparent;
-    border: 0;
-    color: inherit;
-    cursor: pointer;
-    display: inline-flex;
-    font: inherit;
-    gap: 8px;
-    padding: 0;
-  }
-
-  .monthly-sales-caret {
-    align-items: center;
-    background: #0b1f3a;
-    border-radius: 5px;
-    color: #ffffff;
-    display: inline-flex;
+  .executive-region-card th,
+  .executive-region-card td {
+    border-top: 1px solid #eee7db;
     font-size: 12px;
-    height: 20px;
-    justify-content: center;
-    width: 20px;
+    padding: 10px 16px;
+    text-align: left;
   }
 
-  .monthly-sales-achievement {
-    border-radius: 999px;
-    display: inline-block;
-    font-weight: 800;
-    min-width: 68px;
-    padding: 4px 8px;
-    text-align: center;
+  .executive-region-card th:not(:first-child),
+  .executive-region-card td:not(:first-child) {
+    text-align: right;
   }
 
-  .monthly-sales-achievement.good {
-    background: #dff3e7;
-    color: #116b42;
-  }
-
-  .monthly-sales-achievement.watch {
-    background: #fff0c9;
-    color: #8a5a00;
-  }
-
-  .monthly-sales-achievement.low {
-    background: #fde4e7;
-    color: #a62938;
-  }
-
-  .monthly-sales-empty,
-  .monthly-sales-loading {
-    color: #6f7d90;
-    padding: 28px 18px;
-    text-align: center;
-  }
-
-  .monthly-sales-error {
-    background: #fff1f2;
-    border: 1px solid #fecdd3;
-    border-radius: 10px;
-    color: #9f1239;
-    margin: 14px 18px;
-    padding: 12px 14px;
+  .executive-region-card th {
+    background: #faf8f3;
+    color: #6e7785;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   @media (max-width: 900px) {
-    .monthly-sales-heading,
-    .monthly-sales-toolbar {
+    .executive-reconciliation {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-monthly-kpis {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-region-card summary {
+      grid-template-columns: minmax(150px, 1.4fr) repeat(2, 1fr);
+    }
+
+    .executive-region-card summary span:nth-of-type(3),
+    .executive-region-card summary span:nth-of-type(4) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .executive-reconciliation {
+      grid-template-columns: 1fr;
+    }
+
+    .executive-monthly-hero {
       align-items: stretch;
       flex-direction: column;
     }
 
-    .monthly-sales-controls {
+    .executive-monthly-kpis {
       grid-template-columns: 1fr;
     }
 
-    .monthly-sales-summary {
+    .executive-region-card summary {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-region-card summary span:nth-of-type(n+2) {
+      display: none;
+    }
+
+    .executive-trend-controls {
+      width: 100%;
+    }
+
+    .executive-trend-button {
+      flex: 1;
+      padding-inline: 7px;
+    }
+  }
+
+
+  .executive-overview-momentum {
+    display: grid;
+    gap: 12px;
+    min-height: 330px;
+  }
+
+  .executive-overview-summary {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 2px 2px 0;
+  }
+
+  .executive-overview-total span {
+    color: #687386;
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+
+  .executive-overview-total strong {
+    color: #0b1f3a;
+    display: block;
+    font-size: clamp(22px, 2.4vw, 32px);
+    line-height: 1;
+  }
+
+  .executive-overview-meta {
+    color: #6f7786;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: right;
+  }
+
+  .executive-overview-chart {
+    min-height: 285px;
+  }
+
+  .executive-overview-chart svg {
+    display: block;
+    height: auto;
+    min-height: 285px;
+    width: 100%;
+  }
+
+
+  .executive-sales-pulse {
+    min-height: 285px;
+    display: grid;
+    align-content: center;
+  }
+
+  .executive-pulse-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .executive-pulse-metric {
+    border: 1px solid #e8dfcf;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #ffffff, #fbf8f1);
+    padding: 14px 15px;
+    min-width: 0;
+  }
+
+  .executive-pulse-metric span {
+    display: block;
+    color: #687386;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+
+  .executive-pulse-metric strong {
+    display: block;
+    color: #0b1f3a;
+    font-size: clamp(17px, 2vw, 24px);
+    line-height: 1.05;
+  }
+
+  .executive-pulse-metric small {
+    display: block;
+    color: #7b8491;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .executive-pulse-sparkline {
+    border: 1px solid #eee5d6;
+    border-radius: 16px;
+    padding: 12px 14px 8px;
+    background: #fffdf9;
+  }
+
+  .executive-pulse-sparkline svg {
+    display: block;
+    width: 100%;
+    height: 92px;
+  }
+
+  .executive-trends-view {
+    padding: 0 0 28px;
+  }
+
+  .executive-trends-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+
+  .executive-trends-hero h2 {
+    margin: 3px 0 4px;
+    color: #0b1f3a;
+  }
+
+  .executive-trends-hero p {
+    margin: 0;
+    color: #697386;
+  }
+
+  .executive-cache-note {
+    border: 1px solid #e5dac5;
+    background: #fffaf0;
+    color: #6b5b35;
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .executive-trends-panel {
+    min-height: 455px;
+  }
+
+  .executive-trend-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 4px 0 12px;
+  }
+
+  .executive-trend-summary article {
+    border: 1px solid #e8dfcf;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #fffdf9;
+  }
+
+  .executive-trend-summary span {
+    display: block;
+    color: #737d8d;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .executive-trend-summary strong {
+    display: block;
+    color: #0b1f3a;
+    font-size: 18px;
+    margin-top: 5px;
+  }
+
+  .executive-monthly-kpi small {
+    display: block;
+    color: #7b8491;
+    margin-top: 6px;
+    font-size: 11px;
+  }
+
+  @media (max-width: 900px) {
+    .executive-pulse-grid,
+    .executive-trend-summary {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .executive-trends-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .executive-overview-summary {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .executive-overview-meta {
+      text-align: left;
     }
   }
 
   @media (max-width: 560px) {
-    .monthly-sales-summary {
+    .executive-pulse-grid,
+    .executive-trend-summary {
       grid-template-columns: 1fr;
     }
   }
+
 </style>
 
 <script>
   (() => {
     "use strict";
 
-    const monthlySalesState = {
-      active: false,
-      data: null,
-      expandedRegions: new Set(),
-      lastRequestKey: "",
-      loading: false,
+    const executiveState = {
+      trendMode: "AUTO",
+      requestVersion: 0,
+      refreshTimer: null,
+      observer: null,
+      monthlyActive: false,
+      trendsActive: false,
+      latestSupport: null,
     };
 
-    initializeMonthlySalesFeature();
-
-    function initializeMonthlySalesFeature() {
-      removeRegionalScorecard();
-      addThisMonthPreset();
-      addMonthlySalesTab();
-      addMonthlySalesView();
-      registerMonthlySalesEvents();
-      syncMonthlyPickerFromDashboard();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeExecutiveSales);
+    } else {
+      initializeExecutiveSales();
     }
 
+    function initializeExecutiveSales() {
+      removeRegionalScorecard();
+      relabelExecutiveKpis();
+      addExecutiveDatePresets();
+      replaceOverviewTrendCard();
+      addMonthlySalesView();
+      addSalesTrendsView();
+      observeDashboardRefreshes();
+      scheduleExecutiveRefresh(450);
+    }
 
-    /**
-     * Removes the old Regional Scorecard because Monthly Sales now provides
-     * the same regional totals with expandable branch detail.
-     */
     function removeRegionalScorecard() {
       const regionalTab = document.getElementById("regionalTab");
       const regionalView = document.getElementById("regionalScorecardView");
 
-      if (regionalTab) {
-        regionalTab.remove();
-      }
+      if (regionalTab) regionalTab.remove();
+      if (regionalView) regionalView.remove();
+    }
 
-      if (regionalView) {
-        regionalView.remove();
+    function relabelExecutiveKpis() {
+      const salesCard = document.getElementById("kpiSales")?.closest(".kpi");
+      const targetCard = document.getElementById("kpiTarget")?.closest(".kpi");
+      const salesLabel = salesCard?.querySelector(".kpi-label");
+      const targetLabel = targetCard?.querySelector(".kpi-label");
+      const trendPanel = document.getElementById("salesTrendChart")?.closest(".panel");
+      const trendSubtitle = trendPanel?.querySelector(".panel-subtitle");
+
+      if (salesLabel) salesLabel.textContent = "Total encoded collections";
+      if (targetLabel) targetLabel.textContent = "Average branch achievement";
+      if (trendSubtitle) {
+        trendSubtitle.textContent =
+          "All collection entries encoded within the selected date range";
       }
     }
 
-    function addThisMonthPreset() {
-      const presetContainer = document.querySelector(".presets");
+    function addExecutiveDatePresets() {
+      const presets = document.querySelector(".presets");
 
-      if (!presetContainer || document.getElementById("thisMonthPreset")) {
-        return;
-      }
+      if (!presets || document.getElementById("executiveThisMonth")) return;
 
+      const firstExistingButton = presets.querySelector("button");
+      const buttons = [
+        createDatePresetButton("executiveThisMonth", "This month", "THIS_MONTH"),
+        createDatePresetButton("executiveLastMonth", "Last month", "LAST_MONTH"),
+        createDatePresetButton("executiveThisYear", "This year", "THIS_YEAR"),
+      ];
+
+      buttons.forEach((button) => {
+        presets.insertBefore(button, firstExistingButton);
+      });
+    }
+
+    function createDatePresetButton(id, label, preset) {
       const button = document.createElement("button");
+      button.id = id;
       button.className = "preset";
-      button.id = "thisMonthPreset";
       button.type = "button";
-      button.dataset.monthlyPreset = "month";
-      button.textContent = "This month";
-      presetContainer.insertBefore(button, presetContainer.firstElementChild);
+      button.textContent = label;
+      button.addEventListener("click", () => applyExecutiveDatePreset(preset));
+      return button;
     }
 
-    function addMonthlySalesTab() {
-      const tabs = document.querySelector(".dashboard-view-tabs");
+    function applyExecutiveDatePreset(preset) {
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
 
-      if (!tabs || document.getElementById("monthlySalesTab")) {
+      if (!startInput || !endInput || !endInput.max) return;
+
+      const availableMinimum = parseIsoDate(startInput.min || endInput.max);
+      const availableMaximum = parseIsoDate(endInput.max);
+      let selectedStart = new Date(availableMaximum);
+      let selectedEnd = new Date(availableMaximum);
+
+      if (preset === "THIS_MONTH") {
+        selectedStart = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth(),
+          1,
+        );
+        executiveState.trendMode = "DAY";
+      } else if (preset === "LAST_MONTH") {
+        selectedStart = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth() - 1,
+          1,
+        );
+        selectedEnd = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth(),
+          0,
+        );
+        executiveState.trendMode = "DAY";
+      } else {
+        selectedStart = new Date(availableMaximum.getFullYear(), 0, 1);
+        executiveState.trendMode = "MONTH";
+      }
+
+      if (selectedStart < availableMinimum) selectedStart = availableMinimum;
+      if (selectedEnd > availableMaximum) selectedEnd = availableMaximum;
+      if (selectedEnd < availableMinimum) selectedEnd = availableMinimum;
+
+      startInput.value = toIsoDate(selectedStart);
+      endInput.value = toIsoDate(selectedEnd);
+      updateTrendButtonState(executiveState.trendMode);
+      document.getElementById("applyButton")?.click();
+    }
+
+    function replaceOverviewTrendCard() {
+      const host = document.getElementById("salesTrendChart");
+      const panel = host?.closest(".panel");
+
+      if (
+        !host ||
+        !panel ||
+        document.getElementById("executiveOverviewSalesMomentum")
+      ) {
         return;
       }
 
-      const button = document.createElement("button");
-      button.className = "dashboard-view-tab";
-      button.id = "monthlySalesTab";
-      button.type = "button";
-      button.role = "tab";
-      button.dataset.dashboardView = "monthlySalesView";
-      button.setAttribute("aria-selected", "false");
-      button.setAttribute("aria-controls", "monthlySalesView");
-      button.textContent = "Monthly Sales";
+      const title = panel.querySelector(".panel-title, h2, h3");
+      const subtitle = panel.querySelector(".panel-subtitle");
+      const tag = document.getElementById("trendBucket");
 
-      tabs.appendChild(button);
+      if (title) title.textContent = "Sales encoded";
+      if (subtitle) {
+        subtitle.textContent =
+          "All collection entries for the selected date range, including NON and REPRINT";
+      }
+      if (tag) tag.textContent = "Auto view";
+
+      host.id = "executiveOverviewSalesMomentum";
+      host.classList.add("executive-overview-momentum");
+      host.innerHTML =
+        '<div class="empty-chart">Preparing encoded collections for the selected range…</div>';
+    }
+
+    function addSalesTrendsView() {
+      const tabs = document.querySelector(".dashboard-view-tabs");
+      const dashboard = document.getElementById("dashboard");
+
+      if (!tabs || !dashboard || document.getElementById("salesTrendsTab")) {
+        return;
+      }
+
+      const tab = document.createElement("button");
+      tab.id = "salesTrendsTab";
+      tab.className = "dashboard-view-tab";
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", "false");
+      tab.setAttribute("aria-controls", "salesTrendsView");
+      tab.textContent = "Sales Trends";
+      tab.addEventListener("click", () => showSalesTrendsView(true));
+      tabs.appendChild(tab);
+
+      const view = document.createElement("main");
+      view.id = "salesTrendsView";
+      view.className = "hidden executive-trends-view";
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", "salesTrendsTab");
+      view.innerHTML = `
+        <section class="executive-trends-hero">
+          <div>
+            <div class="eyebrow">Executive trend analysis</div>
+            <h2>Reported Service Sales Trends</h2>
+            <p>NON and REPRINT are excluded. Change the date filters above, then switch grouping instantly.</p>
+          </div>
+          <span class="executive-cache-note" id="executiveTrendCacheNote">Preparing all trend views…</span>
+        </section>
+        <section class="panel executive-trends-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Sales movement</h3>
+              <p class="panel-subtitle">Daily, weekly, monthly and yearly series are loaded together.</p>
+            </div>
+            <div class="executive-trend-controls" id="executiveTrendControls"
+              aria-label="Sales trend grouping">
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="DAY">Daily</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="WEEK">Weekly</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="MONTH">Monthly</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="YEAR">Yearly</button>
+            </div>
+          </div>
+          <div class="executive-trend-summary">
+            <article><span>Total reported sales</span><strong id="trendSummaryTotal">—</strong></article>
+            <article><span>Average per period</span><strong id="trendSummaryAverage">—</strong></article>
+            <article><span>Peak period</span><strong id="trendSummaryPeak">—</strong></article>
+            <article><span>Periods shown</span><strong id="trendSummaryCount">—</strong></article>
+          </div>
+          <div id="executiveSalesTrendChart" aria-live="polite">
+            <div class="empty-chart">Loading trend data…</div>
+          </div>
+        </section>
+      `;
+      dashboard.appendChild(view);
+
+      view
+        .querySelectorAll("[data-executive-trend-mode]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.trendMode = button.dataset.executiveTrendMode;
+            renderSelectedExecutiveTrend();
+          });
+        });
+
+      document
+        .querySelectorAll(".dashboard-view-tab:not(#salesTrendsTab)")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.trendsActive = false;
+            document.getElementById("salesTrendsView")?.classList.add("hidden");
+            document.getElementById("salesTrendsTab")?.classList.remove("active");
+            document
+              .getElementById("salesTrendsTab")
+              ?.setAttribute("aria-selected", "false");
+          });
+        });
+
+      updateTrendButtonState(executiveState.trendMode);
+    }
+
+    function showSalesTrendsView(activate) {
+      const trendsView = document.getElementById("salesTrendsView");
+      const trendsTab = document.getElementById("salesTrendsTab");
+
+      if (!trendsView || !trendsTab) return;
+
+      executiveState.trendsActive = activate !== false;
+      executiveState.monthlyActive = false;
+      document.getElementById("overviewView")?.classList.add("hidden");
+      document.getElementById("slotUtilizationView")?.classList.add("hidden");
+      document.getElementById("monthlySalesView")?.classList.add("hidden");
+      trendsView.classList.remove("hidden");
+
+      document.querySelectorAll(".dashboard-view-tab").forEach((button) => {
+        const active = button.id === "salesTrendsTab";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      renderSelectedExecutiveTrend();
+    }
+
+    function renderOverviewSalesMomentum(supportData) {
+      const host = document.getElementById("executiveOverviewSalesMomentum");
+
+      if (!host) return;
+
+      const trendMode = supportData?.trendMode || inferBestTrendMode();
+      const points =
+        supportData?.encodedTrends?.[trendMode] ||
+        supportData?.encodedTrend ||
+        [];
+      const reconciliation = supportData?.reconciliation || {};
+      const filters = supportData?.filtersApplied || {};
+      const encodedCollections = Number(
+        reconciliation.encodedCollections ??
+          points.reduce(
+            (sum, point) => sum + (Number(point.sales) || 0),
+            0,
+          ),
+      );
+      const encodedRows = Number(
+        reconciliation.encodedRows ??
+          (Number(reconciliation.includedRows) || 0) +
+            (Number(reconciliation.excludedRows) || 0),
+      );
+      const groupingLabel = getTrendModeLabel(trendMode);
+      const rangeLabel =
+        filters.startDate && filters.endDate
+          ? `${formatExecutiveDate(filters.startDate)} – ${formatExecutiveDate(filters.endDate)}`
+          : "Selected date range";
+      const tag = document.getElementById("trendBucket");
+
+      if (tag) tag.textContent = `${groupingLabel} view`;
+
+      if (!points.length) {
+        host.innerHTML = `
+          <div class="executive-overview-summary">
+            <div class="executive-overview-total">
+              <span>Total encoded collections</span>
+              <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
+            </div>
+            <div class="executive-overview-meta">
+              ${escapeHtml(formatNumber(encodedRows))} encoded rows<br>
+              ${escapeHtml(rangeLabel)}
+            </div>
+          </div>
+          <div class="empty-chart">No encoded collections for this selection.</div>
+        `;
+        return;
+      }
+
+      host.innerHTML = `
+        <div class="executive-overview-summary">
+          <div class="executive-overview-total">
+            <span>Total encoded collections</span>
+            <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
+          </div>
+          <div class="executive-overview-meta">
+            ${escapeHtml(formatNumber(encodedRows))} encoded rows · ${escapeHtml(groupingLabel)} grouping<br>
+            ${escapeHtml(rangeLabel)} · includes NON and REPRINT
+          </div>
+        </div>
+        <div class="executive-overview-chart" id="executiveOverviewTrendChart"></div>
+      `;
+
+      renderExecutiveTrendChartInto(
+        document.getElementById("executiveOverviewTrendChart"),
+        points,
+        `Total encoded collections for ${rangeLabel}`,
+      );
+    }
+
+    function getTrendModeLabel(mode) {
+      const labels = {
+        DAY: "Daily",
+        WEEK: "Weekly",
+        MONTH: "Monthly",
+        YEAR: "Yearly",
+      };
+
+      return labels[mode] || "Automatic";
+    }
+
+    function renderSelectedExecutiveTrend() {
+      const supportData = executiveState.latestSupport;
+
+      if (!supportData) return;
+
+      const trends = supportData.trends || {};
+      const fallbackMode = supportData.trendMode || inferBestTrendMode();
+
+      if (!trends[executiveState.trendMode]) {
+        executiveState.trendMode = fallbackMode;
+      }
+
+      const points =
+        trends[executiveState.trendMode] || supportData.trend || [];
+
+      updateTrendButtonState(executiveState.trendMode);
+      renderTrendSummary(points);
+      renderExecutiveTrendChart(points);
+    }
+
+    function renderTrendSummary(rawPoints) {
+      const points = (rawPoints || []).map((point) => ({
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+      }));
+      const total = points.reduce((sum, point) => sum + point.sales, 0);
+      const average = points.length ? total / points.length : 0;
+      const peak = points.length
+        ? points.reduce(
+            (winner, point) => (point.sales > winner.sales ? point : winner),
+            points[0],
+          )
+        : null;
+
+      setText("trendSummaryTotal", formatCurrency(total));
+      setText("trendSummaryAverage", formatCurrency(average));
+      setText(
+        "trendSummaryPeak",
+        peak ? `${peak.label} · ${formatCompactCurrency(peak.sales)}` : "—",
+      );
+      setText("trendSummaryCount", formatNumber(points.length));
+    }
+
+
+    function updateTrendButtonState(activeMode) {
+      document
+        .querySelectorAll("[data-executive-trend-mode]")
+        .forEach((button) => {
+          const active = button.dataset.executiveTrendMode === activeMode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+    }
+
+    function addReconciliationStrip() {
+      const kpiGrid = document.querySelector(".kpi-grid");
+
+      if (!kpiGrid || document.getElementById("executiveReconciliation")) return;
+
+      const strip = document.createElement("section");
+      strip.id = "executiveReconciliation";
+      strip.className = "executive-reconciliation";
+      strip.setAttribute("aria-label", "Sales reconciliation");
+      strip.innerHTML = `
+        <article class="executive-reconciliation-card rule">
+          <span>Reporting rule</span>
+          <strong>Reported sales follow DlySLSTrd: NON and REPRINT are excluded.</strong>
+        </article>
+        <article class="executive-reconciliation-card excluded">
+          <span>NON receipts</span>
+          <strong id="executiveNonAmount">—</strong>
+        </article>
+        <article class="executive-reconciliation-card excluded">
+          <span>Reprints</span>
+          <strong id="executiveReprintAmount">—</strong>
+        </article>
+        <article class="executive-reconciliation-card">
+          <span>Total encoded</span>
+          <strong id="executiveEncodedAmount">—</strong>
+        </article>
+      `;
+
+      kpiGrid.insertAdjacentElement("afterend", strip);
     }
 
     function addMonthlySalesView() {
+      const tabs = document.querySelector(".dashboard-view-tabs");
       const dashboard = document.getElementById("dashboard");
 
-      if (!dashboard || document.getElementById("monthlySalesView")) {
+      if (!tabs || !dashboard || document.getElementById("monthlySalesTab")) {
         return;
       }
 
+      const tab = document.createElement("button");
+      tab.id = "monthlySalesTab";
+      tab.className = "dashboard-view-tab";
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", "false");
+      tab.setAttribute("aria-controls", "monthlySalesView");
+      tab.textContent = "Monthly Sales";
+      tab.addEventListener("click", () => {
+        showMonthlySalesView(true);
+        applySelectedMonthToDashboard();
+      });
+      tabs.appendChild(tab);
+
       const view = document.createElement("main");
-      view.className = "monthly-sales-view hidden";
       view.id = "monthlySalesView";
-      view.role = "tabpanel";
+      view.className = "hidden executive-monthly-view";
+      view.setAttribute("role", "tabpanel");
       view.setAttribute("aria-labelledby", "monthlySalesTab");
       view.innerHTML = `
-        <section class="monthly-sales-hero">
-          <div class="monthly-sales-heading">
-            <div>
-              <h2>Monthly Sales Detail</h2>
-              <p>Monthly target, actual sales and achievement by region and branch.</p>
-            </div>
-            <div class="monthly-sales-note" id="monthlySalesPeriodNote">
-              Select a month to load the detailed report.
-            </div>
+        <section class="executive-monthly-hero">
+          <div>
+            <div class="eyebrow">Executive monthly performance</div>
+            <h2>Monthly Sales Detail</h2>
+            <p>Reported service sales, direct monthly targets, and average branch achievement.</p>
           </div>
-          <div class="monthly-sales-controls">
-            <div class="monthly-sales-field">
-              <label for="monthlySalesMonth">Reporting month</label>
-              <input id="monthlySalesMonth" type="month">
-            </div>
-            <button class="button primary" id="loadMonthlySalesButton" type="button">
-              Load month
-            </button>
-            <div class="monthly-sales-note">
-              The month picker controls the reporting dates in this tab. Region and branch selections above are also applied. A partial current month compares actual sales-to-date against the full monthly target.
-            </div>
-          </div>
-          <div class="monthly-sales-summary">
-            <article class="monthly-sales-kpi">
-              <span>Actual sales</span>
-              <strong class="mono" id="monthlySalesActual">—</strong>
-            </article>
-            <article class="monthly-sales-kpi">
-              <span>Monthly target</span>
-              <strong class="mono" id="monthlySalesTarget">—</strong>
-            </article>
-            <article class="monthly-sales-kpi">
-              <span>Target achievement</span>
-              <strong class="mono" id="monthlySalesAchievement">—</strong>
-            </article>
-            <article class="monthly-sales-kpi">
-              <span>Transactions</span>
-              <strong class="mono" id="monthlySalesTransactions">—</strong>
-            </article>
-          </div>
+          <label class="executive-month-field">
+            <span>Reporting month</span>
+            <input id="executiveMonthPicker" type="month">
+          </label>
         </section>
-        <section class="monthly-sales-panel">
-          <div class="monthly-sales-toolbar">
-            <div>
-              <h3 id="monthlySalesTableTitle">Monthly sales by region</h3>
-              <p id="monthlySalesTableSubtitle">Region rows can be expanded to show branches.</p>
-            </div>
-            <button class="button" id="monthlyExpandAllButton" type="button">
-              Collapse all
-            </button>
-          </div>
-          <div id="monthlySalesError" class="monthly-sales-error hidden"></div>
-          <div class="monthly-sales-table-wrap">
-            <table class="monthly-sales-table">
-              <thead>
-                <tr>
-                  <th>Region / Branch</th>
-                  <th class="number">Monthly Target</th>
-                  <th class="number">Actual Sales</th>
-                  <th class="number">Achievement</th>
-                  <th class="number">Variance</th>
-                  <th class="number">Transactions</th>
-                </tr>
-              </thead>
-              <tbody id="monthlySalesTableBody">
-                <tr><td colspan="6" class="monthly-sales-empty">Open the Monthly Sales tab to load data.</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <section class="executive-monthly-kpis">
+          <article class="executive-monthly-kpi">
+            <span>Reported service sales</span>
+            <strong id="monthlyReportedSales">—</strong>
+            <small>Matches DlySLSTrd; NON and REPRINT excluded</small>
+          </article>
+          <article class="executive-monthly-kpi">
+            <span>Official actual collections</span>
+            <strong id="monthlyOfficialCollections">—</strong>
+            <small>From slsTGT column P</small>
+          </article>
+          <article class="executive-monthly-kpi">
+            <span>Official monthly target</span>
+            <strong id="monthlySalesTarget">—</strong>
+            <small>From slsTGT column N</small>
+          </article>
+          <article class="executive-monthly-kpi">
+            <span>Official average branch achievement</span>
+            <strong id="monthlyAverageAchievement">—</strong>
+            <small id="monthlyAchievementNote">Matches SLSAch%</small>
+          </article>
+        </section>
+        <section class="executive-monthly-regions" id="monthlyRegionGroups">
+          <div class="empty-chart">Loading monthly branch details…</div>
         </section>
       `;
-
       dashboard.appendChild(view);
+
+      document
+        .getElementById("executiveMonthPicker")
+        ?.addEventListener("change", handleMonthlyPickerChange);
+
+      document
+        .querySelectorAll(".dashboard-view-tab:not(#monthlySalesTab)")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.monthlyActive = false;
+            document.getElementById("monthlySalesView")?.classList.add("hidden");
+            document.getElementById("monthlySalesTab")?.classList.remove("active");
+            document
+              .getElementById("monthlySalesTab")
+              ?.setAttribute("aria-selected", "false");
+          });
+        });
     }
 
-    function registerMonthlySalesEvents() {
+    function showMonthlySalesView(activate) {
+      const monthlyView = document.getElementById("monthlySalesView");
       const monthlyTab = document.getElementById("monthlySalesTab");
-      const loadButton = document.getElementById("loadMonthlySalesButton");
-      const monthInput = document.getElementById("monthlySalesMonth");
-      const tableBody = document.getElementById("monthlySalesTableBody");
-      const expandButton = document.getElementById("monthlyExpandAllButton");
-      const thisMonthButton = document.getElementById("thisMonthPreset");
-      const applyButton = document.getElementById("applyButton");
-      const refreshButton = document.getElementById("refreshButton");
 
-      if (monthlyTab) {
-        monthlyTab.addEventListener("click", activateMonthlySalesView);
+      if (!monthlyView || !monthlyTab) return;
+
+      executiveState.monthlyActive = activate !== false;
+      executiveState.trendsActive = false;
+      document.getElementById("overviewView")?.classList.add("hidden");
+      document.getElementById("slotUtilizationView")?.classList.add("hidden");
+      document.getElementById("salesTrendsView")?.classList.add("hidden");
+      monthlyView.classList.remove("hidden");
+
+      document.querySelectorAll(".dashboard-view-tab").forEach((button) => {
+        const active = button.id === "monthlySalesTab";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      syncMonthPicker();
+      if (supportMatchesSelectedMonth(executiveState.latestSupport)) {
+        renderMonthlySales(executiveState.latestSupport);
+      } else {
+        const host = document.getElementById("monthlyRegionGroups");
+        if (host) {
+          host.innerHTML =
+            '<div class="empty-chart">Loading the selected month…</div>';
+        }
       }
+    }
 
-      document.querySelectorAll("[data-dashboard-view]").forEach((tab) => {
-        if (tab.id !== "monthlySalesTab") {
-          tab.addEventListener("click", deactivateMonthlySalesView);
+    function supportMatchesSelectedMonth(supportData) {
+      const selectedMonth =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const applied = supportData?.filtersApplied || {};
+
+      return Boolean(
+        /^\d{4}-\d{2}$/.test(selectedMonth) &&
+        String(applied.startDate || "").slice(0, 7) === selectedMonth &&
+        String(applied.endDate || "").slice(0, 7) === selectedMonth
+      );
+    }
+
+    function handleMonthlyPickerChange() {
+      executiveState.monthlyActive = true;
+      applySelectedMonthToDashboard();
+    }
+
+    function applySelectedMonthToDashboard() {
+      const picker = document.getElementById("executiveMonthPicker");
+      const value = picker?.value || "";
+
+      if (!/^\d{4}-\d{2}$/.test(value)) return;
+
+      const [year, month] = value.split("-").map(Number);
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
+
+      if (!startInput || !endInput) return;
+
+      const minimum = parseIsoDate(startInput.min || toIsoDate(start));
+      const maximum = parseIsoDate(endInput.max || toIsoDate(end));
+      const boundedStart = start < minimum ? minimum : start;
+      const boundedEnd = end > maximum ? maximum : end;
+      const nextStart = toIsoDate(boundedStart);
+      const nextEnd = toIsoDate(boundedEnd);
+      const changed =
+        startInput.value !== nextStart || endInput.value !== nextEnd;
+
+      startInput.value = nextStart;
+      endInput.value = nextEnd;
+      executiveState.trendMode = "DAY";
+      updateTrendButtonState("DAY");
+
+      if (changed) {
+        document.getElementById("applyButton")?.click();
+      } else {
+        scheduleExecutiveRefresh(0);
+      }
+    }
+
+    function syncMonthPicker() {
+      const picker = document.getElementById("executiveMonthPicker");
+      const endValue = document.getElementById("endDate")?.value;
+
+      if (picker && /^\d{4}-\d{2}/.test(endValue || "")) {
+        picker.value = endValue.slice(0, 7);
+      }
+    }
+
+    function renderMonthlySales(supportData) {
+      const kpis = supportData.kpis || {};
+      const branches = supportData.branches || [];
+      const regionMap = Object.create(null);
+
+      setText("monthlyReportedSales", formatCurrency(kpis.sales));
+      setText(
+        "monthlyOfficialCollections",
+        formatCurrency(kpis.officialActualCollections),
+      );
+      setText("monthlySalesTarget", formatCurrency(kpis.target));
+      setText(
+        "monthlyAverageAchievement",
+        kpis.targetAchievement == null
+          ? "—"
+          : formatPercentPrecise(kpis.targetAchievement),
+      );
+      setText(
+        "monthlyAchievementNote",
+        `Average of ${formatNumber(kpis.branchAchievementCount || 0)} branch rows · ` +
+          `weighted ${
+            kpis.weightedTargetAchievement == null
+              ? "—"
+              : formatPercentPrecise(kpis.weightedTargetAchievement)
+          }`,
+      );
+      syncMonthPicker();
+
+      branches.forEach((branch) => {
+        const region = branch.region || "Unspecified";
+        if (!regionMap[region]) {
+          regionMap[region] = {
+            region,
+            branches: [],
+            sales: 0,
+            officialActual: 0,
+            target: 0,
+            achievementSum: 0,
+            achievementCount: 0,
+          };
+        }
+        const group = regionMap[region];
+        group.branches.push(branch);
+        group.sales += Number(branch.sales) || 0;
+        group.officialActual += Number(branch.officialActualCollections) || 0;
+        group.target += Number(branch.target) || 0;
+        if (branch.targetAchievement != null) {
+          group.achievementSum += Number(branch.targetAchievement) || 0;
+          group.achievementCount += 1;
         }
       });
 
-      if (loadButton) {
-        loadButton.addEventListener("click", () => loadMonthlySales(false));
+      const groups = Object.values(regionMap).sort(compareRegions);
+      const host = document.getElementById("monthlyRegionGroups");
+      if (!host) return;
+
+      if (!groups.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No monthly branch data for this selection.</div>';
+        return;
       }
 
-      if (monthInput) {
-        monthInput.addEventListener("change", () => loadMonthlySales(false));
-      }
+      host.innerHTML = groups
+        .map((group, index) => {
+          const average =
+            group.achievementCount > 0
+              ? group.achievementSum / group.achievementCount
+              : null;
+          const weighted =
+            group.target > 0
+              ? (group.officialActual / group.target) * 100
+              : null;
+          const branchRows = group.branches
+            .sort((a, b) => (Number(b.sales) || 0) - (Number(a.sales) || 0))
+            .map(
+              (branch) => `
+                <tr>
+                  <td>${escapeHtml(branch.branchName)}</td>
+                  <td>${escapeHtml(formatCurrency(branch.sales))}</td>
+                  <td>${escapeHtml(
+                    formatCurrency(branch.officialActualCollections),
+                  )}</td>
+                  <td>${escapeHtml(formatCurrency(branch.target))}</td>
+                  <td>${
+                    branch.targetAchievement == null
+                      ? "—"
+                      : escapeHtml(formatPercentPrecise(branch.targetAchievement))
+                  }</td>
+                </tr>
+              `,
+            )
+            .join("");
 
-      if (tableBody) {
-        tableBody.addEventListener("click", handleMonthlyTableClick);
-      }
-
-      if (expandButton) {
-        expandButton.addEventListener("click", toggleAllMonthlyRegions);
-      }
-
-      if (thisMonthButton) {
-        thisMonthButton.addEventListener("click", applyThisMonthPreset);
-      }
-
-      // When Monthly Sales is active, reuse the main Apply/Refresh buttons for
-      // this report instead of sending a second overview request.
-      if (applyButton) {
-        applyButton.addEventListener(
-          "click",
-          (event) => handleMainActionForMonthly(event, false),
-          true,
-        );
-      }
-
-      if (refreshButton) {
-        refreshButton.addEventListener(
-          "click",
-          (event) => handleMainActionForMonthly(event, true),
-          true,
-        );
-      }
+          return `
+            <details class="executive-region-card" ${index === 0 ? "open" : ""}>
+              <summary>
+                <strong>${escapeHtml(group.region)}</strong>
+                <span>${escapeHtml(formatCurrency(group.sales))} reported</span>
+                <span>${escapeHtml(formatCurrency(group.officialActual))} official</span>
+                <span>${escapeHtml(formatCurrency(group.target))} target</span>
+                <span>${average == null ? "—" : escapeHtml(formatPercentPrecise(average))} avg.</span>
+                <span>${weighted == null ? "—" : escapeHtml(formatPercentPrecise(weighted))} weighted</span>
+              </summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Branch</th>
+                    <th>Reported sales</th>
+                    <th>Official actual</th>
+                    <th>Target</th>
+                    <th>Official achievement</th>
+                  </tr>
+                </thead>
+                <tbody>${branchRows}</tbody>
+              </table>
+            </details>
+          `;
+        })
+        .join("");
     }
 
-    function activateMonthlySalesView() {
-      monthlySalesState.active = true;
-      [
-        "overviewView",
-        "slotUtilizationView",
-      ].forEach((viewId) => {
-        const view = document.getElementById(viewId);
-        if (view) view.classList.add("hidden");
+
+    function compareRegions(first, second) {
+      if (first.region === "NIR") return -1;
+      if (second.region === "NIR") return 1;
+      const firstNumber = Number((first.region.match(/\d+/) || [999])[0]);
+      const secondNumber = Number((second.region.match(/\d+/) || [999])[0]);
+      return firstNumber - secondNumber || first.region.localeCompare(second.region);
+    }
+
+    function observeDashboardRefreshes() {
+      const salesValue = document.getElementById("kpiSales");
+
+      if (!salesValue || executiveState.observer) return;
+
+      executiveState.observer = new MutationObserver(() => {
+        scheduleExecutiveRefresh(250);
+      });
+      executiveState.observer.observe(salesValue, {
+        childList: true,
+        characterData: true,
+        subtree: true,
       });
 
-      const monthlyView = document.getElementById("monthlySalesView");
-      if (monthlyView) monthlyView.classList.remove("hidden");
-
-      document.querySelectorAll(".dashboard-view-tab").forEach((tab) => {
-        const active = tab.id === "monthlySalesTab";
-        tab.classList.toggle("active", active);
-        tab.setAttribute("aria-selected", active ? "true" : "false");
+      document.getElementById("applyButton")?.addEventListener("click", () => {
+        scheduleExecutiveRefresh(700);
       });
-
-      syncMonthlyPickerFromDashboard();
-      loadMonthlySales(false);
+      document.getElementById("refreshButton")?.addEventListener("click", () => {
+        scheduleExecutiveRefresh(700);
+      });
     }
 
-    function deactivateMonthlySalesView() {
-      monthlySalesState.active = false;
-      const monthlyView = document.getElementById("monthlySalesView");
-      if (monthlyView) monthlyView.classList.add("hidden");
+    function scheduleExecutiveRefresh(delay) {
+      window.clearTimeout(executiveState.refreshTimer);
+      executiveState.refreshTimer = window.setTimeout(
+        refreshExecutiveSales,
+        Math.max(0, Number(delay) || 0),
+      );
     }
 
-    function handleMainActionForMonthly(event, forceRefresh) {
-      if (!monthlySalesState.active) {
-        return;
-      }
+    function refreshExecutiveSales() {
+      if (!isAppsScriptRuntime()) return;
 
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      loadMonthlySales(forceRefresh);
-    }
-
-    function applyThisMonthPreset() {
-      const startDate = document.getElementById("startDate");
-      const endDate = document.getElementById("endDate");
-      const monthInput = document.getElementById("monthlySalesMonth");
-      const applyButton = document.getElementById("applyButton");
-
-      if (!startDate || !endDate || !endDate.value) {
-        return;
-      }
-
-      const latestAvailableDate = endDate.max || endDate.value;
-      const latestMonth = latestAvailableDate.slice(0, 7);
-      const monthStart = `${latestMonth}-01`;
-      const availableMinimum = startDate.min || monthStart;
-
-      startDate.value = monthStart < availableMinimum
-        ? availableMinimum
-        : monthStart;
-      endDate.value = latestAvailableDate;
-
-      if (monthInput) {
-        monthInput.value = latestMonth;
-      }
-
-      if (applyButton) {
-        applyButton.click();
-      }
-    }
-
-    function syncMonthlyPickerFromDashboard() {
-      const monthInput = document.getElementById("monthlySalesMonth");
-      const startDate = document.getElementById("startDate");
-      const endDate = document.getElementById("endDate");
-
-      if (!monthInput || !endDate) {
-        return;
-      }
-
-      if (startDate && startDate.min) {
-        monthInput.min = startDate.min.slice(0, 7);
-      }
-
-      if (endDate.max) {
-        monthInput.max = endDate.max.slice(0, 7);
-      }
-
-      if (!monthInput.value && endDate.value) {
-        monthInput.value = endDate.value.slice(0, 7);
-      }
-    }
-
-    function loadMonthlySales(forceRefresh) {
-      if (monthlySalesState.loading) {
-        return;
-      }
-
-      const filters = buildMonthlyFilters(forceRefresh);
-
-      if (!filters) {
-        showMonthlyError("Select a valid reporting month.");
-        return;
-      }
-
-      const requestKey = JSON.stringify(filters);
-      if (
-        !forceRefresh &&
-        monthlySalesState.data &&
-        monthlySalesState.lastRequestKey === requestKey
-      ) {
-        renderMonthlySales(monthlySalesState.data);
-        return;
-      }
-
-      setMonthlyLoading(true);
-      showMonthlyError("");
-
-      if (
-        typeof google === "undefined" ||
-        !google.script ||
-        !google.script.run
-      ) {
-        setMonthlyLoading(false);
-        showMonthlyError(
-          "Monthly Sales requires the deployed Google Apps Script web app.",
-        );
-        return;
-      }
+      const requestVersion = executiveState.requestVersion + 1;
+      executiveState.requestVersion = requestVersion;
+      const filters = readExecutiveFilters();
 
       google.script.run
-        .withSuccessHandler((data) => {
-          monthlySalesState.data = data;
-          monthlySalesState.lastRequestKey = requestKey;
-          monthlySalesState.expandedRegions.clear();
-          setMonthlyLoading(false);
-          renderMonthlySales(data);
+        .withSuccessHandler((supportData) => {
+          if (requestVersion !== executiveState.requestVersion) return;
+          renderExecutiveSupport(supportData);
         })
         .withFailureHandler((error) => {
-          setMonthlyLoading(false);
-          showMonthlyError(getMonthlyErrorMessage(error));
+          console.warn(
+            "Executive sales support could not be loaded:",
+            error?.message || error,
+          );
         })
-        .getDashboardData(filters);
+        .getExecutiveSalesSupport(filters);
     }
 
-    function buildMonthlyFilters(forceRefresh) {
-      const monthInput = document.getElementById("monthlySalesMonth");
-      const startDate = document.getElementById("startDate");
-      const endDate = document.getElementById("endDate");
-      const regionFilter = document.getElementById("regionFilter");
-      const branchFilter = document.getElementById("branchFilter");
-      const monthValue = monthInput && monthInput.value;
 
-      if (!/^\d{4}-\d{2}$/.test(monthValue || "")) {
-        return null;
-      }
+    function renderExecutiveSupport(supportData) {
+      if (!supportData) return;
 
-      const [year, month] = monthValue.split("-").map(Number);
-      const monthStart = `${monthValue}-01`;
-      const monthEnd = toMonthlyIsoDate(
-        new Date(Date.UTC(year, month, 0)),
+      executiveState.latestSupport = supportData;
+      const reconciliation = supportData.reconciliation || {};
+      const kpis = supportData.kpis || {};
+      const branchCount = Number(supportData.branchAchievementCount) || 0;
+      const weighted = kpis.weightedTargetAchievement;
+      const targetSub = document.getElementById("kpiTargetSub");
+      const salesSub = document.getElementById("kpiSalesSub");
+      const cacheNote = document.getElementById("executiveTrendCacheNote");
+
+      setText(
+        "kpiSales",
+        formatCurrency(reconciliation.encodedCollections ?? kpis.encodedCollections),
       );
-      const availableMin = startDate && startDate.min;
-      const availableMax = endDate && endDate.max;
-      const selectedStart = availableMin && monthStart < availableMin
-        ? availableMin
-        : monthStart;
-      const selectedEnd = availableMax && monthEnd > availableMax
-        ? availableMax
-        : monthEnd;
+      setText(
+        "kpiTarget",
+        kpis.targetAchievement == null
+          ? "—"
+          : formatPercentPrecise(kpis.targetAchievement),
+      );
+      setText("executiveNonAmount", formatCurrency(reconciliation.nonSalesReceipts));
+      setText("executiveReprintAmount", formatCurrency(reconciliation.reprints));
+      setText("executiveEncodedAmount", formatCurrency(reconciliation.encodedCollections));
 
-      if (selectedStart > selectedEnd) {
-        return null;
+      if (salesSub) {
+        const encodedRows =
+          Number(reconciliation.encodedRows) ||
+          (Number(reconciliation.includedRows) || 0) +
+            (Number(reconciliation.excludedRows) || 0);
+        salesSub.textContent =
+          `${formatNumber(encodedRows)} encoded rows · includes NON and REPRINT`;
       }
 
+      if (targetSub) {
+        const weightedText =
+          weighted == null ? "—" : formatPercentPrecise(weighted);
+        targetSub.textContent =
+          `Official SLSAch% · average of ${formatNumber(branchCount)} branch rows · ` +
+          `company-weighted ${weightedText}`;
+      }
+
+      if (cacheNote) {
+        cacheNote.textContent =
+          supportData.cacheStatus === "HIT"
+            ? "All trend views ready · cached"
+            : "All trend views loaded together";
+      }
+
+      if (
+        executiveState.trendMode === "AUTO" ||
+        !supportData.trends?.[executiveState.trendMode]
+      ) {
+        executiveState.trendMode =
+          supportData.trendMode || inferBestTrendMode();
+      }
+
+      renderOverviewSalesMomentum(supportData);
+      renderSelectedExecutiveTrend();
+      renderMonthlySales(supportData);
+
+      if (executiveState.monthlyActive) {
+        document.getElementById("overviewView")?.classList.add("hidden");
+        document.getElementById("slotUtilizationView")?.classList.add("hidden");
+        document.getElementById("salesTrendsView")?.classList.add("hidden");
+        document.getElementById("monthlySalesView")?.classList.remove("hidden");
+      } else if (executiveState.trendsActive) {
+        document.getElementById("overviewView")?.classList.add("hidden");
+        document.getElementById("slotUtilizationView")?.classList.add("hidden");
+        document.getElementById("monthlySalesView")?.classList.add("hidden");
+        document.getElementById("salesTrendsView")?.classList.remove("hidden");
+      }
+    }
+
+
+    function renderExecutiveTrendChart(rawPoints) {
+      renderExecutiveTrendChartInto(
+        document.getElementById("executiveSalesTrendChart"),
+        rawPoints,
+        "Reported service sales trend",
+      );
+    }
+
+    function renderExecutiveTrendChartInto(host, rawPoints, ariaLabel) {
+      const points = (rawPoints || []).map((point) => ({
+        key: point.key || "",
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+        transactions: Number(point.transactions) || 0,
+      }));
+
+      if (!host) return;
+
+      if (!points.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No reported service sales for this selection.</div>';
+        return;
+      }
+
+      const gradientId = `${host.id || "executiveSalesTrend"}Area`;
+      const width = 900;
+      const height = 285;
+      const pad = { top: 18, right: 24, bottom: 44, left: 67 };
+      const chartWidth = width - pad.left - pad.right;
+      const chartHeight = height - pad.top - pad.bottom;
+      const maximum = Math.max(1, ...points.map((point) => point.sales));
+      const yMaximum = calculateNiceMaximum(maximum);
+      const xStep = points.length > 1 ? chartWidth / (points.length - 1) : 0;
+      const coordinates = points.map((point, index) => ({
+        x:
+          pad.left +
+          (points.length === 1 ? chartWidth / 2 : index * xStep),
+        y: pad.top + chartHeight - (point.sales / yMaximum) * chartHeight,
+        point,
+      }));
+      const linePath = coordinates
+        .map(
+          (item, index) =>
+            `${index ? "L" : "M"} ${item.x.toFixed(1)} ${item.y.toFixed(1)}`,
+        )
+        .join(" ");
+      const areaPath =
+        `${linePath} L ${coordinates[coordinates.length - 1].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} L ${coordinates[0].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} Z`;
+      const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+
+      const gridLines = Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const y = pad.top + chartHeight - ratio * chartHeight;
+        const value = yMaximum * ratio;
+        return `
+          <line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"
+            stroke="#e9e2d5" stroke-width="1"/>
+          <text x="${pad.left - 10}" y="${y + 4}" text-anchor="end"
+            fill="#747c89" font-size="10">${escapeHtml(formatCompactCurrency(value))}</text>
+        `;
+      }).join("");
+
+      const xLabels = coordinates
+        .map((item, index) => {
+          if (index % labelEvery !== 0 && index !== coordinates.length - 1) {
+            return "";
+          }
+          return `
+            <text x="${item.x}" y="${height - 12}" text-anchor="middle"
+              fill="#747c89" font-size="10">${escapeHtml(item.point.label)}</text>
+          `;
+        })
+        .join("");
+
+      const circles = coordinates
+        .map(
+          (item) => `
+            <circle class="executive-sales-point"
+              cx="${item.x}" cy="${item.y}" r="5"
+              fill="#ffffff" stroke="#c79224" stroke-width="2"
+              tabindex="0" role="img"
+              data-label="${escapeHtml(item.point.label)}"
+              data-sales="${item.point.sales}"
+              data-transactions="${item.point.transactions}"
+              aria-label="${escapeHtml(
+                `${item.point.label}: ${formatCurrency(item.point.sales)}`,
+              )}">
+            </circle>
+          `,
+        )
+        .join("");
+
+      host.innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" role="img"
+          aria-label="${escapeHtml(ariaLabel || "Reported service sales trend")}">
+          <defs>
+            <linearGradient id="${escapeHtml(gradientId)}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e4b84e" stop-opacity="0.30"/>
+              <stop offset="100%" stop-color="#e4b84e" stop-opacity="0.03"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          <path d="${areaPath}" fill="url(#${escapeHtml(gradientId)})"/>
+          <path d="${linePath}" fill="none" stroke="#0b1f3a" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          ${circles}
+          ${xLabels}
+        </svg>
+      `;
+
+      enableExecutiveChartTooltip(host);
+    }
+
+    function enableExecutiveChartTooltip(host) {
+      let tooltip = document.getElementById("executiveChartTooltip");
+
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.id = "executiveChartTooltip";
+        tooltip.className = "executive-chart-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+      }
+
+      function show(point, clientX, clientY) {
+        const transactions = Number(point.dataset.transactions) || 0;
+        tooltip.innerHTML = `
+          <strong>${escapeHtml(point.dataset.label)}</strong>
+          <span>${escapeHtml(formatCurrency(point.dataset.sales))}</span>
+          <span>${escapeHtml(formatNumber(transactions))} transactions</span>
+        `;
+        tooltip.classList.add("visible");
+
+        const gap = 14;
+        const width = tooltip.offsetWidth;
+        const height = tooltip.offsetHeight;
+        let left = clientX + gap;
+        let top = clientY - height - gap;
+
+        if (left + width > window.innerWidth - 10) {
+          left = clientX - width - gap;
+        }
+        if (top < 10) top = clientY + gap;
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function hide() {
+        tooltip.classList.remove("visible");
+      }
+
+      host.querySelectorAll(".executive-sales-point").forEach((point) => {
+        point.addEventListener("pointerenter", (event) => {
+          show(point, event.clientX, event.clientY);
+        });
+        point.addEventListener("pointermove", (event) => {
+          show(point, event.clientX, event.clientY);
+        });
+        point.addEventListener("pointerleave", hide);
+        point.addEventListener("blur", hide);
+        point.addEventListener("focus", () => {
+          const box = point.getBoundingClientRect();
+          show(point, box.left + box.width / 2, box.top);
+        });
+      });
+    }
+
+    function inferBestTrendMode() {
+      const start = document.getElementById("startDate")?.value;
+      const end = document.getElementById("endDate")?.value;
+
+      if (!start || !end) return "DAY";
+
+      const dayCount =
+        Math.floor((parseIsoDate(end) - parseIsoDate(start)) / 86400000) + 1;
+
+      if (dayCount <= 62) return "DAY";
+      if (dayCount <= 400) return "WEEK";
+      if (dayCount <= 1460) return "MONTH";
+      return "YEAR";
+    }
+
+    function readExecutiveFilters() {
       return {
-        startDate: selectedStart,
-        endDate: selectedEnd,
-        region: regionFilter ? regionFilter.value || "ALL" : "ALL",
-        branch: branchFilter ? branchFilter.value || "ALL" : "ALL",
-        forceRefresh: forceRefresh === true,
+        startDate: document.getElementById("startDate")?.value || "",
+        endDate: document.getElementById("endDate")?.value || "",
+        region: document.getElementById("regionFilter")?.value || "ALL",
+        branch: document.getElementById("branchFilter")?.value || "ALL",
       };
     }
 
-    function setMonthlyLoading(isLoading) {
-      monthlySalesState.loading = isLoading;
-      const loadButton = document.getElementById("loadMonthlySalesButton");
-      const tableBody = document.getElementById("monthlySalesTableBody");
-
-      if (loadButton) {
-        loadButton.disabled = isLoading;
-        loadButton.textContent = isLoading ? "Loading…" : "Load month";
-      }
-
-      if (isLoading && tableBody) {
-        tableBody.innerHTML =
-          '<tr><td colspan="6" class="monthly-sales-loading">Loading monthly sales detail…</td></tr>';
-      }
-    }
-
-    function renderMonthlySales(data) {
-      if (!data) {
-        return;
-      }
-
-      const monthInput = document.getElementById("monthlySalesMonth");
-      const applied = data.filtersApplied || {};
-      const range = data.availableDateRange || {};
-      const kpis = data.kpis || {};
-      const selectedMonth = applied.endDate
-        ? applied.endDate.slice(0, 7)
-        : monthInput && monthInput.value;
-
-      if (monthInput) {
-        if (range.min) monthInput.min = range.min.slice(0, 7);
-        if (range.max) monthInput.max = range.max.slice(0, 7);
-        if (selectedMonth) monthInput.value = selectedMonth;
-      }
-
-      setMonthlyText("monthlySalesActual", formatMonthlyCurrency(kpis.sales));
-      setMonthlyText("monthlySalesTarget", formatMonthlyCurrency(kpis.target));
-      setMonthlyText(
-        "monthlySalesAchievement",
-        kpis.targetAchievement == null
-          ? "—"
-          : formatMonthlyPercent(kpis.targetAchievement),
+    function isAppsScriptRuntime() {
+      return Boolean(
+        window.google &&
+          google.script &&
+          google.script.run &&
+          typeof google.script.run.withSuccessHandler === "function",
       );
-      setMonthlyText(
-        "monthlySalesTransactions",
-        formatMonthlyCount(kpis.transactions),
-      );
-
-      const monthLabel = formatMonthLabel(selectedMonth);
-      const periodNote = document.getElementById("monthlySalesPeriodNote");
-      const title = document.getElementById("monthlySalesTableTitle");
-      const subtitle = document.getElementById("monthlySalesTableSubtitle");
-
-      if (periodNote) {
-        periodNote.textContent = applied.startDate && applied.endDate
-          ? `${monthLabel} · Actual data ${formatMonthlyFriendlyDate(applied.startDate)} to ${formatMonthlyFriendlyDate(applied.endDate)}`
-          : monthLabel;
-      }
-
-      if (title) {
-        title.textContent = `${monthLabel} sales by region`;
-      }
-
-      if (subtitle) {
-        const regionText = applied.region && applied.region !== "ALL"
-          ? applied.region
-          : "All regions";
-        subtitle.textContent =
-          `${regionText} · ${formatMonthlyCount((data.health || {}).salesRowsMatched || 0)} matched sales rows`;
-      }
-
-      const groupedData = buildMonthlyRegionGroups(data);
-
-      if (!monthlySalesState.expandedRegions.size) {
-        groupedData.regions.forEach((region) => {
-          monthlySalesState.expandedRegions.add(region.name);
-        });
-      }
-
-      renderMonthlySalesRows(groupedData);
     }
 
-    function buildMonthlyRegionGroups(data) {
-      const applied = data.filtersApplied || {};
-      const selectedRegion = applied.region || "ALL";
-      const selectedBranch = applied.branch || "ALL";
-      const groups = new Map();
-      const visibleBranches = (data.branches || []).filter((branch) => {
-        const matchesRegion =
-          selectedRegion === "ALL" || branch.region === selectedRegion;
-        const matchesBranch =
-          selectedBranch === "ALL" || branch.branchKey === selectedBranch;
-        const hasBusiness =
-          Number(branch.sales || 0) !== 0 ||
-          Number(branch.target || 0) !== 0;
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      const nextValue = String(value ?? "");
 
-        return matchesRegion && matchesBranch && (hasBusiness || selectedBranch !== "ALL");
-      });
-
-      visibleBranches.forEach((branch) => {
-        const regionName = branch.region || "Unspecified";
-        let group = groups.get(regionName);
-
-        if (!group) {
-          group = {
-            name: regionName,
-            branches: [],
-            target: 0,
-            sales: 0,
-            transactions: 0,
-          };
-          groups.set(regionName, group);
-        }
-
-        group.branches.push(branch);
-        group.target += Number(branch.target || 0);
-        group.sales += Number(branch.sales || 0);
-        group.transactions += Number(branch.transactions || 0);
-      });
-
-      const regions = Array.from(groups.values());
-      regions.forEach((region) => {
-        region.branches.sort((a, b) =>
-          String(a.branchName || "").localeCompare(String(b.branchName || "")),
-        );
-      });
-      regions.sort(compareMonthlyRegions);
-
-      const totals = regions.reduce(
-        (saved, region) => {
-          saved.target += region.target;
-          saved.sales += region.sales;
-          saved.transactions += region.transactions;
-          return saved;
-        },
-        { target: 0, sales: 0, transactions: 0 },
-      );
-
-      return { regions, totals };
-    }
-
-    function compareMonthlyRegions(first, second) {
-      const firstNumber = Number(first.name);
-      const secondNumber = Number(second.name);
-      const firstIsNumber = Number.isFinite(firstNumber);
-      const secondIsNumber = Number.isFinite(secondNumber);
-
-      if (firstIsNumber && secondIsNumber) {
-        return firstNumber - secondNumber;
+      if (element && element.textContent !== nextValue) {
+        element.textContent = nextValue;
       }
-      if (firstIsNumber) return -1;
-      if (secondIsNumber) return 1;
-      return String(first.name).localeCompare(String(second.name));
     }
 
-    function renderMonthlySalesRows(groupedData) {
-      const tableBody = document.getElementById("monthlySalesTableBody");
-      const expandButton = document.getElementById("monthlyExpandAllButton");
-
-      if (!tableBody) {
-        return;
-      }
-
-      if (!groupedData.regions.length) {
-        tableBody.innerHTML =
-          '<tr><td colspan="6" class="monthly-sales-empty">No sales or monthly target was found for this selection.</td></tr>';
-        if (expandButton) expandButton.disabled = true;
-        return;
-      }
-
-      if (expandButton) {
-        expandButton.disabled = false;
-        const allExpanded = groupedData.regions.every((region) =>
-          monthlySalesState.expandedRegions.has(region.name),
-        );
-        expandButton.textContent = allExpanded ? "Collapse all" : "Expand all";
-      }
-
-      const rows = [];
-
-      groupedData.regions.forEach((region) => {
-        const expanded = monthlySalesState.expandedRegions.has(region.name);
-        rows.push(createMonthlyRegionRow(region, expanded));
-
-        if (expanded) {
-          region.branches.forEach((branch) => {
-            rows.push(createMonthlyBranchRow(branch));
-          });
-        }
-      });
-
-      rows.push(createMonthlyTotalRow(groupedData.totals));
-      tableBody.innerHTML = rows.join("");
-    }
-
-    function createMonthlyRegionRow(region, expanded) {
-      const achievement = calculateMonthlyAchievement(region.sales, region.target);
-      const variance = region.sales - region.target;
-      return `
-        <tr class="monthly-sales-region-row">
-          <td>
-            <button class="monthly-sales-region-toggle" type="button" data-monthly-region="${escapeMonthlyHtml(region.name)}" aria-expanded="${expanded}">
-              <span class="monthly-sales-caret">${expanded ? "−" : "+"}</span>
-              ${escapeMonthlyHtml(region.name)} Total
-            </button>
-          </td>
-          <td class="number mono">${formatMonthlyCurrency(region.target)}</td>
-          <td class="number mono">${formatMonthlyCurrency(region.sales)}</td>
-          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
-          <td class="number mono">${formatMonthlySignedCurrency(variance)}</td>
-          <td class="number mono">${formatMonthlyCount(region.transactions)}</td>
-        </tr>
-      `;
-    }
-
-    function createMonthlyBranchRow(branch) {
-      const target = Number(branch.target || 0);
-      const sales = Number(branch.sales || 0);
-      const achievement = branch.targetAchievement == null
-        ? calculateMonthlyAchievement(sales, target)
-        : Number(branch.targetAchievement);
-      return `
-        <tr class="monthly-sales-branch-row">
-          <td>${escapeMonthlyHtml(branch.branchName || branch.branchKey || "Unspecified")}</td>
-          <td class="number mono">${formatMonthlyCurrency(target)}</td>
-          <td class="number mono">${formatMonthlyCurrency(sales)}</td>
-          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
-          <td class="number mono">${formatMonthlySignedCurrency(sales - target)}</td>
-          <td class="number mono">${formatMonthlyCount(branch.transactions)}</td>
-        </tr>
-      `;
-    }
-
-    function createMonthlyTotalRow(totals) {
-      const achievement = calculateMonthlyAchievement(totals.sales, totals.target);
-      return `
-        <tr class="monthly-sales-total-row">
-          <td>Grand Total</td>
-          <td class="number mono">${formatMonthlyCurrency(totals.target)}</td>
-          <td class="number mono">${formatMonthlyCurrency(totals.sales)}</td>
-          <td class="number">${formatMonthlyAchievementBadge(achievement)}</td>
-          <td class="number mono">${formatMonthlySignedCurrency(totals.sales - totals.target)}</td>
-          <td class="number mono">${formatMonthlyCount(totals.transactions)}</td>
-        </tr>
-      `;
-    }
-
-    function handleMonthlyTableClick(event) {
-      const button = event.target.closest("[data-monthly-region]");
-
-      if (!button || !monthlySalesState.data) {
-        return;
-      }
-
-      const regionName = button.dataset.monthlyRegion;
-      if (monthlySalesState.expandedRegions.has(regionName)) {
-        monthlySalesState.expandedRegions.delete(regionName);
-      } else {
-        monthlySalesState.expandedRegions.add(regionName);
-      }
-
-      renderMonthlySalesRows(buildMonthlyRegionGroups(monthlySalesState.data));
-    }
-
-    function toggleAllMonthlyRegions() {
-      if (!monthlySalesState.data) {
-        return;
-      }
-
-      const groupedData = buildMonthlyRegionGroups(monthlySalesState.data);
-      const allExpanded = groupedData.regions.every((region) =>
-        monthlySalesState.expandedRegions.has(region.name),
-      );
-
-      monthlySalesState.expandedRegions.clear();
-      if (!allExpanded) {
-        groupedData.regions.forEach((region) => {
-          monthlySalesState.expandedRegions.add(region.name);
-        });
-      }
-
-      renderMonthlySalesRows(groupedData);
-    }
-
-    function calculateMonthlyAchievement(sales, target) {
-      return target > 0 ? (sales / target) * 100 : null;
-    }
-
-    function formatMonthlyAchievementBadge(value) {
-      if (value == null || !Number.isFinite(Number(value))) {
-        return '<span class="monthly-sales-achievement low">—</span>';
-      }
-
-      const numericValue = Number(value);
-      const level = numericValue >= 100
-        ? "good"
-        : numericValue >= 80
-          ? "watch"
-          : "low";
-      return `<span class="monthly-sales-achievement ${level}">${formatMonthlyPercent(numericValue)}</span>`;
-    }
-
-    function formatMonthlyCurrency(value) {
+    function formatCurrency(value) {
       return new Intl.NumberFormat("en-PH", {
         style: "currency",
         currency: "PHP",
         maximumFractionDigits: 0,
-      }).format(Number(value || 0));
+      }).format(Number(value) || 0);
     }
 
-    function formatMonthlySignedCurrency(value) {
-      const numericValue = Number(value || 0);
-      const absolute = formatMonthlyCurrency(Math.abs(numericValue));
-      return numericValue < 0 ? `−${absolute}` : absolute;
+    function formatCompactCurrency(value) {
+      return (
+        "₱" +
+        new Intl.NumberFormat("en", {
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(Number(value) || 0)
+      );
     }
 
-    function formatMonthlyPercent(value) {
-      return `${Number(value || 0).toLocaleString("en-PH", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}%`;
+    function formatPercent(value) {
+      return `${(Number(value) || 0).toFixed(1)}%`;
     }
 
-    function formatMonthlyCount(value) {
-      return Number(value || 0).toLocaleString("en-PH", {
+    function formatPercentPrecise(value) {
+      return `${(Number(value) || 0).toFixed(2)}%`;
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("en-PH", {
         maximumFractionDigits: 0,
-      });
+      }).format(Number(value) || 0);
     }
 
-    function formatMonthLabel(monthValue) {
-      if (!/^\d{4}-\d{2}$/.test(monthValue || "")) {
-        return "Selected month";
-      }
+    function calculateNiceMaximum(value) {
+      const safeValue = Math.max(1, Number(value) || 1);
+      const exponent = Math.floor(Math.log10(safeValue));
+      const fraction = safeValue / Math.pow(10, exponent);
+      let niceFraction = 10;
 
-      const [year, month] = monthValue.split("-").map(Number);
-      return new Intl.DateTimeFormat("en-PH", {
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(new Date(Date.UTC(year, month - 1, 1)));
+      if (fraction <= 1) niceFraction = 1;
+      else if (fraction <= 2) niceFraction = 2;
+      else if (fraction <= 5) niceFraction = 5;
+
+      return niceFraction * Math.pow(10, exponent);
     }
 
-    function formatMonthlyFriendlyDate(isoDate) {
-      if (!isoDate) return "—";
-      const [year, month, day] = isoDate.split("-").map(Number);
-      return new Intl.DateTimeFormat("en-PH", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(new Date(Date.UTC(year, month - 1, day)));
-    }
-
-    function toMonthlyIsoDate(date) {
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-      const day = String(date.getUTCDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    }
-
-    function setMonthlyText(elementId, value) {
-      const element = document.getElementById(elementId);
-      if (element) element.textContent = value;
-    }
-
-    function showMonthlyError(message) {
-      const error = document.getElementById("monthlySalesError");
-      if (!error) return;
-      error.textContent = message || "";
-      error.classList.toggle("hidden", !message);
-    }
-
-    function getMonthlyErrorMessage(error) {
-      if (!error) return "Unable to load monthly sales data.";
-      if (typeof error === "string") return error;
-      return error.message || "Unable to load monthly sales data.";
-    }
-
-    function escapeMonthlyHtml(value) {
-      return String(value == null ? "" : value)
+    function escapeHtml(value) {
+      return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    }
+
+    function formatExecutiveDate(value) {
+      const date = parseIsoDate(value);
+
+      if (Number.isNaN(date.getTime())) return String(value || "—");
+
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+    }
+
+    function parseIsoDate(value) {
+      const [year, month, day] = String(value).split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    function toIsoDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
   })();
 </script>
