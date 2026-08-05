@@ -1,22 +1,18 @@
 /**
- * Executive sales reporting and official monthly-achievement alignment.
+ * Executive sales reporting aligned with the redesigned SLSAch% pivots.
  *
- * Reporting rules:
- * 1. Every dashboard view uses all encoded collections, including General
- *    Service Type NON and REPRINT, except the dedicated Sales Trends view.
- * 2. Sales Trends alone excludes NON and REPRINT, matching the DlySLSTrd
- *    operational-sales pivot.
- * 3. Official target achievement is read directly from the existing slsTGT
- *    tab, matching the SLSAch% pivot:
- *      N = Final monthly target
- *      P = Branch actual collections
- *      Q = Branch sales achievement percentage
- * 4. Zero-percent non-operational branch rows are included in the official
- *    average because the supplied pivot includes them.
- * 5. Daily, weekly, monthly and yearly trends are prepared together and
- *    cached, so switching the chart view does not call the server again.
+ * SLSAch% now reads CATEGORY OF SALES V2 directly and excludes General
+ * Service Type NON and REPRINT. Its achievement values are SUMs of the
+ * row-level contribution columns:
+ *   M = company achievement contribution
+ *   N = region achievement contribution
+ *   O = branch achievement contribution
+ * Monthly targets are the repeated J/K/L values, counted once per month at
+ * the company, region, or branch level.
  *
- * This file is read-only. It does not edit any Google Sheet value or formula.
+ * The dedicated Sales Trends view follows the same NON/REPRINT exclusion.
+ * Overview encoded collections remain available from the base dashboard.
+ * This file is read-only and never writes to the spreadsheet.
  */
 
 function buildDashboardDataWithMonthlyTargetFix_(requestedFilters) {
@@ -48,7 +44,7 @@ function buildExecutiveSalesSupport_(requestedFilters) {
     salesSource.minDate,
     salesSource.maxDate
   );
-  const resultType = 'EXECUTIVE_PERF_V10_PIVOT_ALIGNED';
+  const resultType = 'EXECUTIVE_PERF_V12_NEW_SLSACH';
 
   if (!forceRefresh) {
     const cached = readDashboardResultCache_(
@@ -109,14 +105,11 @@ function buildExecutiveSalesDataFromSources_(
   );
 
   /*
-   * Read the official SLSAch% source once. The same in-memory values are reused
-   * for the selected range and the preloaded month snapshot.
+   * The current SLSAch% pivots use CATEGORY OF SALES V2 itself. The required
+   * J:O and AZ:BI values are already present in the normalized sales source,
+   * so no additional Sheet read is needed here.
    */
-  const officialSource =
-    sourceResult.sources.officialTargets ||
-    executiveReadOfficialSource_(spreadsheet);
-  const officialResult = executiveCalculateOfficialAchievement_(
-    officialSource,
+  const officialResult = executiveCalculatePivotAchievement_(
     salesSource,
     filters
   );
@@ -164,6 +157,7 @@ function buildExecutiveSalesDataFromSources_(
     serviceMix: topSeries_(aggregation.serviceMix, 6),
     topBranches: executiveBuildTopBranches_(branchSummaries, 10),
     branches: branchSummaries,
+    regions: executiveBuildRegionSummaries_(officialResult),
     kpis: kpis,
     branchAchievementCount: kpis.branchAchievementCount,
     transactionSource: {
@@ -175,9 +169,10 @@ function buildExecutiveSalesDataFromSources_(
       sourceSheet: officialResult.source,
       target: round2_(officialResult.selectedTarget),
       actualCollections: round2_(officialResult.selectedActual),
-      averageBranchAchievement: nullableRound2_(
-        officialResult.averageAchievement
+      targetAchievement: nullableRound2_(
+        officialResult.selectedAchievement
       ),
+      scope: officialResult.scope,
       branchRecordCount: officialResult.achievementCount
     },
     reconciliation: executiveBuildReconciliation_(
@@ -202,7 +197,6 @@ function buildExecutiveSalesDataFromSources_(
     filters,
     timezone,
     response,
-    officialSource,
     sharedTrendBucketCache
   );
 
@@ -214,7 +208,6 @@ function executiveBuildPreloadedMonthSnapshot_(
   filters,
   timezone,
   preparedResponse,
-  officialSource,
   sharedTrendBucketCache
 ) {
   const anchor = filters.endDate;
@@ -279,8 +272,7 @@ function executiveBuildPreloadedMonthSnapshot_(
     sharedTrendBucketCache
   );
 
-  const officialResult = executiveCalculateOfficialAchievement_(
-    officialSource,
+  const officialResult = executiveCalculatePivotAchievement_(
     salesSource,
     monthlyFilters
   );
@@ -304,6 +296,7 @@ function executiveBuildPreloadedMonthSnapshot_(
       branch: monthlyFilters.branch
     },
     branches: branchSummaries,
+    regions: executiveBuildRegionSummaries_(officialResult),
     kpis: kpis,
     branchAchievementCount: kpis.branchAchievementCount,
     transactionSource: {
@@ -315,9 +308,10 @@ function executiveBuildPreloadedMonthSnapshot_(
       sourceSheet: officialResult.source,
       target: round2_(officialResult.selectedTarget),
       actualCollections: round2_(officialResult.selectedActual),
-      averageBranchAchievement: nullableRound2_(
-        officialResult.averageAchievement
+      targetAchievement: nullableRound2_(
+        officialResult.selectedAchievement
       ),
+      scope: officialResult.scope,
       branchRecordCount: officialResult.achievementCount
     },
     reconciliation: executiveBuildReconciliation_(
@@ -332,6 +326,7 @@ function executiveCompactMonthlySnapshot_(response) {
   return {
     filtersApplied: response.filtersApplied,
     branches: response.branches,
+    regions: response.regions,
     kpis: response.kpis,
     branchAchievementCount: response.branchAchievementCount,
     transactionSource: response.transactionSource,
@@ -431,20 +426,21 @@ function executiveAggregateSales_(
   ) {
     const salesRow = salesSource.rows[rowIndex];
 
-    if (!salesRow.date || !salesRow.branchKey) {
+    if (!salesRow.date) {
       continue;
     }
 
-    const identity = resolveBranchIdentity_(
+    const identity = executiveGetCollectionIdentity_(
       salesRow,
-      salesSource.canonicalBranches
+      salesSource
     );
 
     if (
+      !identity.branchKey ||
       !matchesFilters_(
         salesRow.date,
         identity.region,
-        salesRow.branchKey,
+        identity.branchKey,
         filters
       )
     ) {
@@ -454,37 +450,17 @@ function executiveAggregateSales_(
     const amount = numberOrZero_(salesRow.amount);
     const transactions = nonNegativeNumber_(salesRow.transactions);
     const classification = executiveClassifyService_(
-      salesRow.serviceGroup
+      salesRow.generalServiceType || salesRow.serviceGroup
     );
-
-    /*
-     * All non-trend dashboard views use every encoded collection row,
-     * including NON and REPRINT.
-     */
-    aggregation.encodedAmount += amount;
-    aggregation.encodedTransactions += transactions;
-
-    const branch = executiveGetBranchAggregate_(
-      aggregation.branches,
-      salesRow.branchKey,
-      identity.branchName,
-      identity.region
-    );
-
-    branch.sales += amount;
-    branch.transactions += transactions;
-
-    addToMap_(
-      aggregation.serviceMix,
-      salesRow.serviceGroup,
-      amount
-    );
-
     const trendBuckets = executiveGetAllTrendBuckets_(
       salesRow.date,
       timezone,
       trendBucketCache
     );
+
+    // Keep the complete encoded total for Overview compatibility.
+    aggregation.encodedAmount += amount;
+    aggregation.encodedTransactions += transactions;
 
     executiveAddTrendBucket_(
       aggregation.encodedTrends.DAY,
@@ -511,10 +487,6 @@ function executiveAggregateSales_(
       transactions
     );
 
-    /*
-     * The dedicated Sales Trends series is the only place that excludes
-     * NON and REPRINT, matching the DlySLSTrd pivot.
-     */
     if (classification.excluded) {
       aggregation.excludedRows += 1;
 
@@ -533,6 +505,22 @@ function executiveAggregateSales_(
 
     aggregation.includedRows += 1;
     aggregation.includedAmount += amount;
+
+    const branch = executiveGetBranchAggregate_(
+      aggregation.branches,
+      identity.branchKey,
+      identity.branchName,
+      identity.region
+    );
+
+    branch.sales += amount;
+    branch.transactions += transactions;
+
+    addToMap_(
+      aggregation.serviceMix,
+      salesRow.serviceGroup,
+      amount
+    );
 
     executiveAddTrendBucket_(
       aggregation.trends.DAY,
@@ -559,6 +547,32 @@ function executiveAggregateSales_(
       transactions
     );
   }
+}
+
+function executiveGetCollectionIdentity_(salesRow, salesSource) {
+  const branchKey =
+    salesRow.collectionBranchKey ||
+    salesRow.branchKey ||
+    '';
+  const collectionBranches =
+    (salesSource && salesSource.collectionBranches) || {};
+  const savedBranch = collectionBranches[branchKey] || {};
+  const branchName =
+    salesRow.collectionBranchName ||
+    savedBranch.branchName ||
+    salesRow.branchName ||
+    branchKey;
+  const region =
+    salesRow.collectionRegion ||
+    savedBranch.region ||
+    salesRow.region ||
+    'Unspecified';
+
+  return {
+    branchKey: branchKey,
+    branchName: branchName,
+    region: region
+  };
 }
 
 /**
@@ -681,238 +695,226 @@ function executiveGetBranchAggregate_(
 }
 
 /**
- * Reads the same source used by the SLSAch% pivot.
- *
- * The official pivot uses:
- *   N = target (sum)
- *   P = actual collections (sum)
- *   Q = branch achievement (average)
- *
- * Unlike the previous implementation, target=0 / achievement=0 rows are not
- * dropped. The pivot includes those numeric zero percentages in its average.
+ * Reproduces the current SLSAch% pivot calculations from CATEGORY OF SALES V2.
+ * NON and REPRINT rows are excluded exactly as configured in the pivots.
  */
-function executiveReadOfficialAchievement_(
-  spreadsheet,
-  salesSource,
-  filters
-) {
-  return executiveCalculateOfficialAchievement_(
-    executiveReadOfficialSource_(spreadsheet),
-    salesSource,
-    filters
-  );
-}
-
-function executiveReadOfficialSource_(spreadsheet) {
-  const targetSheet = executiveFindTargetSheet_(spreadsheet);
-
-  if (!targetSheet || targetSheet.getLastRow() < 2) {
-    return {
-      source: 'CATEGORY OF SALES V2',
-      values: []
-    };
-  }
-
-  const lastRow = targetSheet.getLastRow();
-  const dataRowCount = getActualDataRowCountByColumn_(
-    targetSheet,
-    1,
-    lastRow
-  );
-
-  if (dataRowCount < 1) {
-    return {
-      source: targetSheet.getName(),
-      values: []
-    };
-  }
-
-  return {
-    source: targetSheet.getName(),
-    values: targetSheet
-      .getRange(2, 1, dataRowCount, 17)
-      .getValues()
-  };
-}
-
-function executiveCalculateOfficialAchievement_(
-  officialSource,
-  salesSource,
-  filters
-) {
-  const source = officialSource || {
-    source: 'slsTGT',
-    rows: [],
-    values: []
-  };
-  const compactRows = Array.isArray(source.rows)
-    ? source.rows
-    : [];
-  const legacyValues = Array.isArray(source.values)
-    ? source.values
-    : [];
-  const records = compactRows.length
-    ? compactRows
-    : legacyValues;
-  const usingCompactRows = compactRows.length > 0;
+function executiveCalculatePivotAchievement_(salesSource, filters) {
   const byBranch = Object.create(null);
+  const byRegion = Object.create(null);
   const identities = Object.create(null);
-  let selectedTarget = 0;
-  let selectedActual = 0;
-  let achievementSum = 0;
-  let achievementCount = 0;
+  const company = executiveCreatePivotAggregate_();
+  const rowBounds = executiveFindSalesDateBounds_(
+    salesSource,
+    filters.startDate,
+    filters.endDate
+  );
 
-  for (let rowIndex = 0; rowIndex < records.length; rowIndex += 1) {
-    const sourceRow = records[rowIndex];
-    const year = positiveInteger_(
-      usingCompactRows ? sourceRow.year : sourceRow[0]
+  for (
+    let rowIndex = rowBounds.start;
+    rowIndex < rowBounds.end;
+    rowIndex += 1
+  ) {
+    const salesRow = salesSource.rows[rowIndex];
+
+    if (!salesRow.date) continue;
+
+    const identity = executiveGetCollectionIdentity_(
+      salesRow,
+      salesSource
     );
-    const month = positiveInteger_(
-      usingCompactRows ? sourceRow.month : sourceRow[1]
-    );
-    const rawRegion = normalizeRegion_(
-      usingCompactRows ? sourceRow.region : sourceRow[3]
-    );
-    const branchName = cleanText_(
-      usingCompactRows ? sourceRow.branchName : sourceRow[5]
-    );
-    const branchKey =
-      (usingCompactRows && sourceRow.branchKey) ||
-      normalizeKey_(branchName);
 
     if (
-      !year ||
-      !month ||
-      !branchKey ||
-      !executiveMonthIsSelected_(year, month, filters)
+      !identity.branchKey ||
+      !matchesFilters_(
+        salesRow.date,
+        identity.region,
+        identity.branchKey,
+        filters
+      )
     ) {
       continue;
     }
 
-    const canonical = salesSource.canonicalBranches[branchKey];
-    const region = rawRegion ||
-      (canonical && canonical.region
-        ? canonical.region
-        : 'Unspecified');
-
-    if (
-      filters.region !== 'ALL' &&
-      region !== filters.region
-    ) {
-      continue;
-    }
-
-    if (
-      filters.branch !== 'ALL' &&
-      branchKey !== filters.branch
-    ) {
-      continue;
-    }
-
-    const target = nonNegativeNumber_(
-      usingCompactRows ? sourceRow.target : sourceRow[13]
-    );
-    const actual = nonNegativeNumber_(
-      usingCompactRows ? sourceRow.actual : sourceRow[15]
-    );
-    const achievement = executiveNullableNumber_(
-      usingCompactRows ? sourceRow.achievement : sourceRow[16]
+    const classification = executiveClassifyService_(
+      salesRow.generalServiceType || salesRow.serviceGroup
     );
 
-    if (!byBranch[branchKey]) {
-      byBranch[branchKey] = {
-        target: 0,
-        actual: 0,
-        achievementSum: 0,
-        achievementCount: 0,
-        recordCount: 0
-      };
+    if (classification.excluded) continue;
+
+    const period =
+      (positiveInteger_(salesRow.year) || salesRow.date.getFullYear()) * 100 +
+      (positiveInteger_(salesRow.month) || salesRow.date.getMonth() + 1);
+    const amount = numberOrZero_(salesRow.amount);
+    const transactions = nonNegativeNumber_(salesRow.transactions);
+
+    executiveAddPivotRow_(
+      company,
+      period,
+      salesRow.companyTarget,
+      amount,
+      transactions,
+      salesRow.companyAchievementContribution
+    );
+
+    if (!byRegion[identity.region]) {
+      byRegion[identity.region] = executiveCreatePivotAggregate_();
     }
 
-    const branch = byBranch[branchKey];
-    branch.target += target;
-    branch.actual += actual;
-    branch.recordCount += 1;
+    executiveAddPivotRow_(
+      byRegion[identity.region],
+      period,
+      salesRow.regionTarget,
+      amount,
+      transactions,
+      salesRow.regionAchievementContribution
+    );
 
-    if (achievement !== null) {
-      branch.achievementSum += achievement;
-      branch.achievementCount += 1;
-      achievementSum += achievement;
-      achievementCount += 1;
+    if (!byBranch[identity.branchKey]) {
+      byBranch[identity.branchKey] = executiveCreatePivotAggregate_();
     }
 
-    selectedTarget += target;
-    selectedActual += actual;
-    identities[branchKey] = {
-      branchName:
-        branchName ||
-        (canonical && canonical.branchName
-          ? canonical.branchName
-          : branchKey),
-      region: region
+    executiveAddPivotRow_(
+      byBranch[identity.branchKey],
+      period,
+      salesRow.branchTarget,
+      amount,
+      transactions,
+      salesRow.branchAchievementContribution
+    );
+
+    identities[identity.branchKey] = {
+      branchName: identity.branchName,
+      region: identity.region
     };
   }
+
+  executiveFinalizePivotAggregate_(company);
+  Object.keys(byRegion).forEach(function finalizeRegion(region) {
+    executiveFinalizePivotAggregate_(byRegion[region]);
+  });
+  Object.keys(byBranch).forEach(function finalizeBranch(branchKey) {
+    executiveFinalizePivotAggregate_(byBranch[branchKey]);
+  });
+
+  let selected = company;
+  let scope = 'COMPANY';
+
+  if (filters.branch !== 'ALL') {
+    selected = byBranch[filters.branch] || executiveCreatePivotAggregate_();
+    executiveFinalizePivotAggregate_(selected);
+    scope = 'BRANCH';
+  } else if (filters.region !== 'ALL') {
+    selected = byRegion[filters.region] || executiveCreatePivotAggregate_();
+    executiveFinalizePivotAggregate_(selected);
+    scope = 'REGION';
+  }
+
+  const branchKeys = Object.keys(byBranch);
 
   return {
     byBranch: byBranch,
+    byRegion: byRegion,
     identities: identities,
-    source: source.source,
-    selectedTarget: round2_(selectedTarget),
-    selectedActual: round2_(selectedActual),
-    achievementSum: achievementSum,
-    achievementCount: achievementCount,
-    averageAchievement:
-      achievementCount > 0
-        ? (achievementSum / achievementCount) * 100
-        : null
+    company: company,
+    source: DASHBOARD_CONFIG.SALES_SHEET,
+    scope: scope,
+    selectedTarget: round2_(selected.target),
+    selectedActual: round2_(selected.actual),
+    selectedTransactions: round2_(selected.transactions),
+    selectedAchievement:
+      selected.rowCount > 0
+        ? round2_(selected.achievementContribution * 100)
+        : null,
+    achievementCount: branchKeys.length
   };
 }
 
-function executiveFindTargetSheet_(spreadsheet) {
-  const preferredNames = [
-    DASHBOARD_CONFIG.TARGET_SHEET,
-    'slsTGT',
-    ' slsTGT'
-  ].filter(Boolean);
-
-  for (let index = 0; index < preferredNames.length; index += 1) {
-    const exactSheet = spreadsheet.getSheetByName(preferredNames[index]);
-
-    if (exactSheet) {
-      return exactSheet;
-    }
-  }
-
-  const desiredName = 'slstgt';
-  const sheets = spreadsheet.getSheets();
-
-  for (let index = 0; index < sheets.length; index += 1) {
-    const normalizedName = sheets[index]
-      .getName()
-      .replace(/\s+/g, '')
-      .toLowerCase();
-
-    if (normalizedName === desiredName) {
-      return sheets[index];
-    }
-  }
-
-  return null;
+function executiveCreatePivotAggregate_() {
+  return {
+    targetByMonth: Object.create(null),
+    target: 0,
+    actual: 0,
+    transactions: 0,
+    achievementContribution: 0,
+    rowCount: 0
+  };
 }
 
-function executiveMonthIsSelected_(year, month, filters) {
-  const targetPeriod = Number(year) * 100 + Number(month);
-  const startPeriod =
-    filters.startDate.getFullYear() * 100 +
-    filters.startDate.getMonth() + 1;
-  const endPeriod =
-    filters.endDate.getFullYear() * 100 +
-    filters.endDate.getMonth() + 1;
+function executiveAddPivotRow_(
+  aggregate,
+  period,
+  target,
+  amount,
+  transactions,
+  achievementContribution
+) {
+  const numericTarget = nonNegativeNumber_(target);
+  const periodKey = String(period || '');
 
-  return (
-    targetPeriod >= startPeriod &&
-    targetPeriod <= endPeriod
+  if (periodKey && numericTarget > 0) {
+    const savedTarget = numberOrZero_(aggregate.targetByMonth[periodKey]);
+
+    // The pivot repeats the same monthly target on every transaction row.
+    // Keep one value per month instead of summing the repeated values.
+    aggregate.targetByMonth[periodKey] = Math.max(
+      savedTarget,
+      numericTarget
+    );
+  }
+
+  aggregate.actual += numberOrZero_(amount);
+  aggregate.transactions += nonNegativeNumber_(transactions);
+  aggregate.achievementContribution += numberOrZero_(
+    achievementContribution
   );
+  aggregate.rowCount += 1;
+}
+
+function executiveFinalizePivotAggregate_(aggregate) {
+  if (!aggregate || aggregate.finalized === true) return aggregate;
+
+  const periods = Object.keys(aggregate.targetByMonth || {});
+  let target = 0;
+
+  for (let index = 0; index < periods.length; index += 1) {
+    target += numberOrZero_(aggregate.targetByMonth[periods[index]]);
+  }
+
+  aggregate.target = target;
+  aggregate.achievement = aggregate.rowCount > 0
+    ? aggregate.achievementContribution * 100
+    : null;
+  aggregate.finalized = true;
+  return aggregate;
+}
+
+function executiveBuildRegionSummaries_(officialResult) {
+  const byRegion = officialResult.byRegion || {};
+  const identities = officialResult.identities || {};
+  const branchCounts = Object.create(null);
+
+  Object.keys(identities).forEach(function countBranch(branchKey) {
+    const region = identities[branchKey].region || 'Unspecified';
+    branchCounts[region] = (branchCounts[region] || 0) + 1;
+  });
+
+  return Object.keys(byRegion)
+    .map(function mapRegion(region) {
+      const aggregate = byRegion[region];
+
+      return {
+        region: region,
+        sales: round2_(aggregate.actual),
+        actualCollections: round2_(aggregate.actual),
+        target: round2_(aggregate.target),
+        targetAchievement: nullableRound2_(aggregate.achievement),
+        transactions: round2_(aggregate.transactions),
+        branchCount: branchCounts[region] || 0
+      };
+    })
+    .sort(function sortRegions(first, second) {
+      return regionSort_(first.region, second.region);
+    });
 }
 
 function executiveBuildBranchSummaries_(
@@ -921,70 +923,55 @@ function executiveBuildBranchSummaries_(
   aggregation,
   officialResult
 ) {
-  const existingKeys = Object.keys(
-    salesSource.canonicalBranches || {}
-  );
-  const salesKeys = Object.keys(aggregation.branches);
-  const officialKeys = Object.keys(officialResult.byBranch);
+  const salesKeys = Object.keys(aggregation.branches || {});
+  const officialKeys = Object.keys(officialResult.byBranch || {});
   const allKeysMap = Object.create(null);
 
-  existingKeys.concat(salesKeys, officialKeys).forEach(
-    function saveKey(branchKey) {
-      allKeysMap[branchKey] = true;
-    }
-  );
+  salesKeys.concat(officialKeys).forEach(function saveKey(branchKey) {
+    allKeysMap[branchKey] = true;
+  });
 
   const summaries = [];
   const allKeys = Object.keys(allKeysMap);
 
   for (let index = 0; index < allKeys.length; index += 1) {
     const branchKey = allKeys[index];
-    const canonical = salesSource.canonicalBranches[branchKey] || {};
     const officialIdentity = officialResult.identities[branchKey] || {};
+    const collectionCanonical =
+      (salesSource.collectionBranches || {})[branchKey] || {};
     const salesAggregate = aggregation.branches[branchKey] || {};
     const official = officialResult.byBranch[branchKey] || {};
     const branchName =
       officialIdentity.branchName ||
-      canonical.branchName ||
+      collectionCanonical.branchName ||
       salesAggregate.branchName ||
       branchKey;
     const region =
       officialIdentity.region ||
-      canonical.region ||
+      collectionCanonical.region ||
       salesAggregate.region ||
       'Unspecified';
 
-    if (
-      filters.region !== 'ALL' &&
-      region !== filters.region
-    ) {
+    if (filters.region !== 'ALL' && region !== filters.region) {
       continue;
     }
 
-    if (
-      filters.branch !== 'ALL' &&
-      branchKey !== filters.branch
-    ) {
+    if (filters.branch !== 'ALL' && branchKey !== filters.branch) {
       continue;
     }
 
-    const sales = numberOrZero_(salesAggregate.sales);
+    const sales = numberOrZero_(official.actual || salesAggregate.sales);
     const target = numberOrZero_(official.target);
-    const officialActual = numberOrZero_(official.actual);
-    const transactions = nonNegativeNumber_(salesAggregate.transactions);
-    const achievementCount = nonNegativeNumber_(
-      official.achievementCount
+    const transactions = nonNegativeNumber_(
+      official.transactions || salesAggregate.transactions
     );
-    const officialAverage = achievementCount > 0
-      ? (numberOrZero_(official.achievementSum) / achievementCount) * 100
-      : null;
+    const achievement = executiveNullableNumber_(official.achievement);
 
     if (
       sales <= 0 &&
       target <= 0 &&
-      officialActual <= 0 &&
       transactions <= 0 &&
-      !achievementCount
+      achievement === null
     ) {
       continue;
     }
@@ -994,16 +981,16 @@ function executiveBuildBranchSummaries_(
       branchName: branchName,
       region: region,
       sales: round2_(sales),
-      officialActualCollections: round2_(officialActual),
+      officialActualCollections: round2_(sales),
       target: round2_(target),
-      targetAchievement: nullableRound2_(officialAverage),
+      targetAchievement: nullableRound2_(achievement),
       weightedTargetAchievement: nullableRound2_(
-        percentageOrNull_(officialActual, target)
+        percentageOrNull_(sales, target)
       ),
       reportedTargetProgress: nullableRound2_(
         percentageOrNull_(sales, target)
       ),
-      achievementRecordCount: achievementCount,
+      achievementRecordCount: official.rowCount || 0,
       transactions: round2_(transactions),
       averageTicket: round2_(
         divideOrDefault_(sales, transactions, 0)
@@ -1029,34 +1016,26 @@ function executiveBuildKpis_(
   aggregation,
   officialResult
 ) {
-  let totalTransactions = 0;
-
-  for (
-    let branchIndex = 0;
-    branchIndex < branchSummaries.length;
-    branchIndex += 1
-  ) {
-    totalTransactions += branchSummaries[branchIndex].transactions;
-  }
-
   const encodedSales = round2_(aggregation.encodedAmount);
   const reportedServiceSales = round2_(aggregation.includedAmount);
   const target = round2_(officialResult.selectedTarget);
   const officialActual = round2_(officialResult.selectedActual);
+  const officialTransactions = round2_(
+    officialResult.selectedTransactions
+  );
 
   return {
-    // Used by Monthly Sales and all non-trend views.
+    // Complete encoded totals remain available to the Overview.
     sales: encodedSales,
     encodedCollections: encodedSales,
     encodedTransactions: round2_(aggregation.encodedTransactions),
 
-    // Used only by the dedicated Sales Trends view and reconciliation.
+    // Pivot-aligned service sales are used by Monthly Sales and branch detail.
     reportedServiceSales: reportedServiceSales,
-
     officialActualCollections: officialActual,
     target: target,
     targetAchievement: nullableRound2_(
-      officialResult.averageAchievement
+      officialResult.selectedAchievement
     ),
     weightedTargetAchievement: nullableRound2_(
       percentageOrNull_(officialActual, target)
@@ -1065,9 +1044,9 @@ function executiveBuildKpis_(
       percentageOrNull_(reportedServiceSales, target)
     ),
     branchAchievementCount: officialResult.achievementCount,
-    transactions: round2_(totalTransactions),
+    transactions: officialTransactions,
     averageTicket: round2_(
-      divideOrDefault_(encodedSales, totalTransactions, 0)
+      divideOrDefault_(officialActual, officialTransactions, 0)
     ),
     excludedCollections: round2_(
       aggregation.encodedAmount - aggregation.includedAmount
@@ -1248,12 +1227,11 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   dashboardData.kpis = dashboardData.kpis || {};
   dashboardData.charts = dashboardData.charts || {};
   dashboardData.health = dashboardData.health || {};
+  dashboardData.branches = dashboardData.branches || [];
 
   /*
-   * Keep the normal Overview values and charts produced by buildDashboardData_.
-   * All non-trend views include every encoded collection entry, including NON
-   * and REPRINT. Only executiveData.trends excludes those categories, matching
-   * the DlySLSTrd pivot.
+   * Keep the Overview encoded-collection total, but align target achievement
+   * and branch performance with the current SLSAch% pivot calculations.
    */
   dashboardData.kpis.officialActualCollections =
     executiveData.kpis.officialActualCollections;
@@ -1271,10 +1249,12 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   dashboardData.kpis.excludedCollections =
     executiveData.kpis.excludedCollections;
 
+  applyPivotBranchesToDashboard_(dashboardData, executiveData.branches || []);
+
   dashboardData.meta.salesReportingRule =
-    'ALL_VIEWS_ENCODED_EXCEPT_SALES_TRENDS';
+    'OVERVIEW_ENCODED_MONTHLY_AND_BRANCH_SLSACH';
   dashboardData.meta.targetAchievementMethod =
-    'DIRECT_SLSACH_AVERAGE_INCLUDING_ZERO_ROWS';
+    'SLSACH_SUM_OF_M_N_O_CONTRIBUTIONS';
   dashboardData.health.salesRowsExcludedFromTrends =
     executiveData.reconciliation.excludedRows;
 
@@ -1287,6 +1267,8 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
       executiveData.kpis.weightedTargetAchievement,
     reportedTargetProgress:
       executiveData.kpis.reportedTargetProgress,
+    regions: executiveData.regions,
+    branches: executiveData.branches,
     trends: executiveData.trends,
     encodedTrends: executiveData.encodedTrends,
     cacheStatus: executiveData.cacheStatus,
@@ -1294,3 +1276,72 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   };
 }
 
+function applyPivotBranchesToDashboard_(dashboardData, pivotBranches) {
+  const pivotByKey = Object.create(null);
+  const dashboardByKey = Object.create(null);
+
+  for (let index = 0; index < pivotBranches.length; index += 1) {
+    pivotByKey[pivotBranches[index].branchKey] = pivotBranches[index];
+  }
+
+  for (let index = 0; index < dashboardData.branches.length; index += 1) {
+    const branch = dashboardData.branches[index];
+    const pivot = pivotByKey[branch.branchKey];
+    dashboardByKey[branch.branchKey] = true;
+
+    if (!pivot) continue;
+
+    branch.branchName = pivot.branchName || branch.branchName;
+    branch.region = pivot.region || branch.region;
+    branch.sales = round2_(pivot.sales);
+    branch.target = round2_(pivot.target);
+    branch.targetAchievement = nullableRound2_(
+      pivot.targetAchievement
+    );
+    branch.transactions = round2_(pivot.transactions);
+    branch.averageTicket = round2_(pivot.averageTicket);
+    branch.salesLessDisbursements = round2_(
+      branch.sales - numberOrZero_(branch.expenses)
+    );
+  }
+
+  for (let index = 0; index < pivotBranches.length; index += 1) {
+    const pivot = pivotBranches[index];
+
+    if (dashboardByKey[pivot.branchKey]) continue;
+
+    dashboardData.branches.push({
+      branchKey: pivot.branchKey,
+      branchName: pivot.branchName,
+      region: pivot.region,
+      sales: round2_(pivot.sales),
+      target: round2_(pivot.target),
+      targetAchievement: nullableRound2_(pivot.targetAchievement),
+      transactions: round2_(pivot.transactions),
+      averageTicket: round2_(pivot.averageTicket),
+      customers: 0,
+      expenses: 0,
+      salesLessDisbursements: round2_(pivot.sales),
+      tdcAllocated: null,
+      tdcUsed: null,
+      tdcPreviousAllocated: null,
+      tdcPreviousUsed: null,
+      tdcUtilization: null,
+      tdcTrend: createUtilizationTrend_(null, null),
+      pdcAllocated: null,
+      pdcUsed: null,
+      pdcPreviousAllocated: null,
+      pdcPreviousUsed: null,
+      pdcUtilization: null,
+      pdcTrend: createUtilizationTrend_(null, null)
+    });
+  }
+
+  dashboardData.branches.sort(function sortPivotBranches(first, second) {
+    if (second.sales !== first.sales) {
+      return second.sales - first.sales;
+    }
+
+    return first.branchName.localeCompare(second.branchName);
+  });
+}

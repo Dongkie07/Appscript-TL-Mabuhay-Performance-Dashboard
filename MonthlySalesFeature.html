@@ -577,7 +577,7 @@
       const trendSubtitle = trendPanel?.querySelector(".panel-subtitle");
 
       if (salesLabel) salesLabel.textContent = "Gross sales";
-      if (targetLabel) targetLabel.textContent = "Average branch achievement";
+      if (targetLabel) targetLabel.textContent = "Target achievement";
       if (trendSubtitle) {
         trendSubtitle.textContent =
           "All collection entries encoded within the selected date range";
@@ -1002,7 +1002,7 @@
           <div>
             <div class="eyebrow">Monthly target performance</div>
             <h2>Monthly Sales Detail</h2>
-            <p>Actual collections, monthly targets, and achievement values from SLSAch%.</p>
+            <p>Sales, monthly targets, and achievement values aligned with SLSAch%.</p>
           </div>
           <label class="executive-month-field">
             <span>Reporting month</span>
@@ -1011,9 +1011,9 @@
         </section>
         <section class="executive-monthly-kpis">
           <article class="executive-monthly-kpi">
-            <span>Actual collections</span>
+            <span>Sales</span>
             <strong id="monthlyOfficialCollections">—</strong>
-            <small>Monthly total</small>
+            <small>SLSAch% total</small>
           </article>
           <article class="executive-monthly-kpi">
             <span>Monthly target</span>
@@ -1021,9 +1021,9 @@
             <small>Monthly total</small>
           </article>
           <article class="executive-monthly-kpi">
-            <span>Average branch achievement</span>
+            <span>Target achievement</span>
             <strong id="monthlyAverageAchievement">—</strong>
-            <small id="monthlyAchievementNote">Based on branch achievement rows</small>
+            <small id="monthlyAchievementNote">Based on SLSAch% calculation</small>
           </article>
         </section>
         <section class="executive-monthly-regions" id="monthlyRegionGroups">
@@ -1325,6 +1325,7 @@
     function renderMonthlySales(supportData) {
       const kpis = supportData.kpis || {};
       const branches = supportData.branches || [];
+      const suppliedRegions = supportData.regions || [];
       const regionMap = Object.create(null);
 
       setText(
@@ -1340,10 +1341,25 @@
       );
       setText(
         "monthlyAchievementNote",
-        `Average of ${formatNumber(
+        `${formatNumber(
           kpis.branchAchievementCount || 0,
-        )} branch rows`,
+        )} branches in the selected scope`,
       );
+
+      suppliedRegions.forEach((regionSummary) => {
+        const region = regionSummary.region || "Unspecified";
+
+        regionMap[region] = {
+          region,
+          branches: [],
+          actual: Number(regionSummary.actualCollections ?? regionSummary.sales) || 0,
+          target: Number(regionSummary.target) || 0,
+          targetAchievement:
+            regionSummary.targetAchievement == null
+              ? null
+              : Number(regionSummary.targetAchievement),
+        };
+      });
 
       branches.forEach((branch) => {
         const region = branch.region || "Unspecified";
@@ -1354,30 +1370,15 @@
             branches: [],
             actual: 0,
             target: 0,
-            achievementSum: 0,
-            achievementCount: 0,
+            targetAchievement: null,
           };
         }
 
-        const group = regionMap[region];
-        group.branches.push(branch);
-        group.actual += Number(branch.officialActualCollections) || 0;
-        group.target += Number(branch.target) || 0;
-
-        if (branch.targetAchievement != null) {
-          group.achievementSum += Number(branch.targetAchievement) || 0;
-          group.achievementCount += 1;
-        }
+        regionMap[region].branches.push(branch);
       });
 
       const groups = Object.values(regionMap)
-        .map((group) => {
-          group.averageAchievement =
-            group.achievementCount > 0
-              ? group.achievementSum / group.achievementCount
-              : null;
-          return group;
-        })
+        .filter((group) => group.branches.length || group.actual || group.target)
         .sort(compareMonthlyRegionPerformance);
 
       const host = document.getElementById("monthlyRegionGroups");
@@ -1425,21 +1426,21 @@
             <details class="executive-region-card" ${index === 0 ? "open" : ""}>
               <summary>
                 <strong>${escapeHtml(group.region)}</strong>
-                <span>${escapeHtml(formatCurrency(group.actual))} actual</span>
-                <span>${escapeHtml(formatCurrency(group.target))} target</span>
+                <span>${escapeHtml(formatCurrency(group.actual))}</span>
+                <span>${escapeHtml(formatCurrency(group.target))}</span>
                 <span>${
-                  group.averageAchievement == null
+                  group.targetAchievement == null
                     ? "—"
                     : escapeHtml(
-                        formatPercentPrecise(group.averageAchievement),
+                        formatPercentPrecise(group.targetAchievement),
                       )
-                } achievement</span>
+                }</span>
               </summary>
               <table>
                 <thead>
                   <tr>
                     <th>Branch</th>
-                    <th>Actual collections</th>
+                    <th>Sales</th>
                     <th>Monthly target</th>
                     <th>Achievement</th>
                   </tr>
@@ -1454,13 +1455,13 @@
 
     function compareMonthlyRegionPerformance(first, second) {
       const firstAchievement =
-        first.averageAchievement == null
+        first.targetAchievement == null
           ? Number.NEGATIVE_INFINITY
-          : Number(first.averageAchievement);
+          : Number(first.targetAchievement);
       const secondAchievement =
-        second.averageAchievement == null
+        second.targetAchievement == null
           ? Number.NEGATIVE_INFINITY
-          : Number(second.averageAchievement);
+          : Number(second.targetAchievement);
 
       if (secondAchievement !== firstAchievement) {
         return secondAchievement - firstAchievement;
