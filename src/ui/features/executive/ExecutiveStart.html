@@ -19,6 +19,8 @@
       renderingSupport: false,
       idleHandle: null,
     };
+    
+    window.executiveState = executiveState;
 
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", initializeExecutiveSales);

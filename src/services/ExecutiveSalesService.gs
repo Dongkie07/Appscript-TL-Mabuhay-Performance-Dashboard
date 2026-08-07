@@ -239,7 +239,7 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   dashboardData.meta.salesReportingRule =
     'OVERVIEW_ENCODED_MONTHLY_AND_BRANCH_SLSACH';
   dashboardData.meta.targetAchievementMethod =
-    'SLSACH_SUM_OF_M_N_O_CONTRIBUTIONS';
+  'CUMULATIVE_ACTUAL_DIVIDED_BY_CUMULATIVE_TARGET';
   dashboardData.health.salesRowsExcludedFromTrends =
     executiveData.reconciliation.excludedRows;
 

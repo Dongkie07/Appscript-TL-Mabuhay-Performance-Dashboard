@@ -131,7 +131,7 @@ function executiveCalculatePivotAchievement_(salesSource, filters) {
     selectedTransactions: round2_(selected.transactions),
     selectedAchievement:
       selected.rowCount > 0
-        ? round2_(selected.achievementContribution * 100)
+        ? nullableRound2_(selected.achievement)
         : null,
     achievementCount: branchKeys.length
   };
