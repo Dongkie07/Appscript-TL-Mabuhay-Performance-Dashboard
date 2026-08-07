@@ -16,8 +16,8 @@ function doGet() {
 /** Includes one HTML/CSS/JavaScript partial by its clasp path. */
 function include(fileName) {
   return HtmlService
-    .createHtmlOutputFromFile(fileName)
-    .getContent();
+    .createTemplateFromFile(fileName)
+    .getRawContent();
 }
 
 /**

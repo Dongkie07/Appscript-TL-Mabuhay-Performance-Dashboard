@@ -2,6 +2,12 @@
  * Execution-local memory cache for repeated work inside one server runtime.
  */
 
+/* eslint-disable no-unused-vars */
+var DASHBOARD_MEMORY_SOURCE_CACHE_ = null;
+var DASHBOARD_MEMORY_RESULT_CACHE_ = Object.create(null);
+var DASHBOARD_MEMORY_RESULT_ORDER_ = [];
+/* eslint-enable no-unused-vars */
+
 function dashboardMemoryTtlMs_(seconds) {
   return Math.max(1, Number(seconds) || 1) * 1000;
 }

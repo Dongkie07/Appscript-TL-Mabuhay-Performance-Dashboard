@@ -96,6 +96,17 @@ function validateHtml(files) {
   return { fileCount: htmlFiles.length, scriptCount: scripts.length };
 }
 
+
+function validateWebAppInclude() {
+  const webAppPath = path.join(srcDir, 'web', 'WebApp.gs');
+  const source = fs.readFileSync(webAppPath, 'utf8');
+
+  assert(
+    /function\s+include\s*\([^)]*\)\s*\{[\s\S]*?createTemplateFromFile\([\s\S]*?getRawContent\(\)/m.test(source),
+    'WebApp include() must use createTemplateFromFile(...).getRawContent() so split HTML/script partials are composed before final validation.',
+  );
+}
+
 function validateManifest() {
   const manifestPath = path.join(srcDir, 'appsscript.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -116,6 +127,7 @@ function reportLargeFiles(files) {
 
 const files = walk(srcDir);
 validateManifest();
+validateWebAppInclude();
 const server = validateServerFiles(files);
 const html = validateHtml(files);
 reportLargeFiles(files);
