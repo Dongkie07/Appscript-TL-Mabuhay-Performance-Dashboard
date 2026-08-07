@@ -24,6 +24,11 @@
         "slotSharingServiceFilter",
       );
       const searchInput = document.getElementById("slotSharingSearch");
+      const jumpBtn = document.getElementById("jumpToSlotSharingBtn");
+
+      jumpBtn?.addEventListener("click", () => {
+        document.getElementById("slotSharingPanel")?.scrollIntoView({ behavior: "smooth" });
+      });
 
       tab?.addEventListener("click", () => {
         slotSharingState.active = true;

@@ -47,8 +47,18 @@ function updateCapacitySnapshot_(
     return;
   }
 
-  const periodKey =
-    salesRow.year * 100 + salesRow.week;
+  const hasValidWeek =
+    Number.isFinite(Number(salesRow.week)) &&
+    Number(salesRow.week) > 0;
+
+  const periodKey = hasValidWeek
+    ? `W:${salesRow.year}:${Number(salesRow.week)}`
+    : `M:${salesRow.year}:${Number(salesRow.month) || 0}`;
+
+  const periodSortKey = salesRow.date
+    ? salesRow.date.getTime()
+    : 0;
+
   let branchHistory =
     capacitySnapshots[salesRow.branchKey];
 
@@ -66,6 +76,7 @@ function updateCapacitySnapshot_(
     branchHistory.snapshots[snapshotKey];
   const incomingSnapshot = createCapacitySnapshot_(
     periodKey,
+    periodSortKey,
     salesRow,
     branchName,
     region
@@ -84,14 +95,14 @@ function updateCapacitySnapshot_(
 
   if (
     !branchHistory.latest ||
-    periodKey > branchHistory.latest.periodKey
+    periodSortKey > branchHistory.latest.periodSortKey
   ) {
     branchHistory.previous = branchHistory.latest;
     branchHistory.latest = incomingSnapshot;
     return;
   }
 
-  if (periodKey === branchHistory.latest.periodKey) {
+  if (periodSortKey === branchHistory.latest.periodSortKey) {
     mergeCapacitySnapshot_(
       branchHistory.latest,
       incomingSnapshot
@@ -101,13 +112,13 @@ function updateCapacitySnapshot_(
 
   if (
     !branchHistory.previous ||
-    periodKey > branchHistory.previous.periodKey
+    periodSortKey > branchHistory.previous.periodSortKey
   ) {
     branchHistory.previous = incomingSnapshot;
     return;
   }
 
-  if (periodKey === branchHistory.previous.periodKey) {
+  if (periodSortKey === branchHistory.previous.periodSortKey) {
     mergeCapacitySnapshot_(
       branchHistory.previous,
       incomingSnapshot
@@ -117,12 +128,14 @@ function updateCapacitySnapshot_(
 
 function createCapacitySnapshot_(
   periodKey,
+  periodSortKey,
   salesRow,
   branchName,
   region
 ) {
   return {
     periodKey: periodKey,
+    periodSortKey: periodSortKey,
     periodLabel: createCapacityPeriodLabel_(salesRow),
     branchName: branchName,
     region: region,

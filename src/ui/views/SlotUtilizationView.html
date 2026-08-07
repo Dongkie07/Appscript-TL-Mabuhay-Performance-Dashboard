@@ -196,8 +196,19 @@
             >
           </label>
 
-          <div class="slot-toolbar-count mono" id="slotBranchCount">
-            0 branches
+          <div class="slot-toolbar-actions" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+            <div class="slot-toolbar-count mono" id="slotBranchCount">
+              0 branches
+            </div>
+            <button
+              type="button"
+              id="jumpToSlotSharingBtn"
+              class="slot-course-tab"
+              title="Scroll down to Slot Sharing"
+              style="min-width: auto; height: 28px; min-height: 28px; padding: 0 10px; background: transparent; border-color: var(--teal); color: var(--teal); cursor: pointer;"
+            >
+              ↓ Slot Sharing
+            </button>
           </div>
         </section>
 
@@ -232,7 +243,107 @@
           <div class="slot-ledger-rows" id="slotUtilizationRows"></div>
         </section>
 
-        <?!= include('ui/views/SlotSharingPanel'); ?>
+        <section
+  class="slot-sharing-panel deferred-render"
+  id="slotSharingPanel"
+  aria-labelledby="slotSharingTitle"
+>
+  <div class="slot-sharing-header">
+    <div>
+      <div class="slot-sharing-eyebrow">Source-to-collection movement</div>
+      <h2 class="panel-title" id="slotSharingTitle">Slot sharing</h2>
+      <p class="panel-subtitle">
+        Shows which source branch supplied TDC or PDC capacity and which
+        collection branch used it.
+      </p>
+    </div>
+    <span class="slot-sharing-status mono" id="slotSharingStatus">
+      Open this tab to load
+    </span>
+  </div>
+
+  <div class="slot-sharing-kpis" aria-label="Slot sharing summary">
+    <article>
+      <span>Lent slots</span>
+      <strong class="mono" id="slotSharingTotalSlots">—</strong>
+      <small id="slotSharingSlotBreakdown">TDC — · PDC —</small>
+    </article>
+    <article>
+      <span>Related transactions</span>
+      <strong class="mono" id="slotSharingTransactions">—</strong>
+      <small>Source branch differs from collection branch</small>
+    </article>
+    <article>
+      <span>Sales generated</span>
+      <strong class="mono" id="slotSharingSales">—</strong>
+      <small>Amount tied to the selected sharing records</small>
+    </article>
+    <article class="quality">
+      <span>Source pending</span>
+      <strong class="mono" id="slotSharingUnknown">—</strong>
+      <small>Rows with lent slots but no usable source branch</small>
+    </article>
+  </div>
+
+  <div class="slot-sharing-toolbar">
+    <label>
+      <span>Course</span>
+      <select id="slotSharingServiceFilter">
+        <option value="ALL">TDC and PDC</option>
+        <option value="TDC">TDC only</option>
+        <option value="PDC">PDC only</option>
+      </select>
+    </label>
+    <label class="search">
+      <span>Search relationship</span>
+      <input
+        id="slotSharingSearch"
+        type="search"
+        placeholder="Lender, borrower, or region"
+      >
+    </label>
+    <span class="slot-sharing-count mono" id="slotSharingCount">0 rows</span>
+  </div>
+
+  <div class="slot-sharing-leaders">
+    <article>
+      <h3>Top lending branches</h3>
+      <div class="slot-sharing-ranking" id="slotSharingTopLenders"></div>
+    </article>
+    <article>
+      <h3>Top borrowing branches</h3>
+      <div class="slot-sharing-ranking" id="slotSharingTopBorrowers"></div>
+    </article>
+  </div>
+
+  <div class="slot-sharing-table-wrap">
+    <table class="slot-sharing-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Course</th>
+          <th>Lender / source branch</th>
+          <th>Borrower / collection branch</th>
+          <th class="number">Slots</th>
+          <th class="number">Transactions</th>
+          <th class="number">Sales</th>
+        </tr>
+      </thead>
+      <tbody id="slotSharingTableBody">
+        <tr>
+          <td colspan="7" class="slot-sharing-empty">
+            Open the TDC &amp; PDC tab to load slot-sharing records.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="slot-sharing-note" id="slotSharingNote">
+    Lender is based on Final Branch (SOURCE), with SOURCE input as fallback.
+    Borrower is based on COLLECTION BRANCH.
+  </p>
+</section>
 
         <div class="footer-note">
           “Current” is not an all-time average. It combines each branch’s latest

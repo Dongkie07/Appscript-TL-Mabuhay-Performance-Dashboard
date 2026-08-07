@@ -10,7 +10,7 @@ const DASHBOARD_CONFIG = Object.freeze({
   TITLE: 'TL Mabuhay Driving School Performance Dashboard',
   DEFAULT_WINDOW: 'LATEST_MONTH',
   SOURCE_CACHE_SECONDS: 15 * 60,
-  SOURCE_CACHE_VERSION: '2026-08-07-clean-source-v1',
+  SOURCE_CACHE_VERSION: '2026-08-07-capacity-identity-v3',
   RESULT_CACHE_SECONDS: 15 * 60,
   RESULT_CACHE_VERSION: '2026-08-07-clean-results-v1',
   CACHE_CHUNK_CHARACTERS: 70000,
