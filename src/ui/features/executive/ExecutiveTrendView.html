@@ -1,0 +1,291 @@
+    function addSalesTrendsView() {
+      const tabs = document.querySelector(".dashboard-view-tabs");
+      const dashboard = document.getElementById("dashboard");
+
+      if (!tabs || !dashboard || document.getElementById("salesTrendsTab")) {
+        return;
+      }
+
+      const tab = document.createElement("button");
+      tab.id = "salesTrendsTab";
+      tab.className = "dashboard-view-tab";
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", "false");
+      tab.setAttribute("aria-controls", "salesTrendsView");
+      tab.textContent = "Sales Trends";
+      tab.addEventListener("click", () => showSalesTrendsView(true));
+      tabs.appendChild(tab);
+
+      const view = document.createElement("main");
+      view.id = "salesTrendsView";
+      view.className = "hidden executive-trends-view";
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", "salesTrendsTab");
+      view.innerHTML = `
+        <section class="executive-trends-hero">
+          <div>
+            <div class="eyebrow">Executive trend analysis</div>
+            <h2>Sales Trends</h2>
+            <p>Matches the DlySLSTrd reporting basis. Change the date filters, then switch grouping instantly.</p>
+          </div>
+          <span class="executive-cache-note" id="executiveTrendCacheNote">Preparing all trend views…</span>
+        </section>
+        <section class="panel executive-trends-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Sales movement</h3>
+              <p class="panel-subtitle">Daily, weekly, monthly and yearly series are loaded together.</p>
+            </div>
+            <div class="executive-trend-controls" id="executiveTrendControls"
+              aria-label="Sales trend grouping">
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="DAY">Daily</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="WEEK">Weekly</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="MONTH">Monthly</button>
+              <button class="executive-trend-button" type="button"
+                data-executive-trend-mode="YEAR">Yearly</button>
+            </div>
+          </div>
+          <div class="executive-trend-summary">
+            <article><span>Total reported sales</span><strong id="trendSummaryTotal">—</strong></article>
+            <article><span>Average per period</span><strong id="trendSummaryAverage">—</strong></article>
+            <article><span>Peak period</span><strong id="trendSummaryPeak">—</strong></article>
+            <article><span>Periods shown</span><strong id="trendSummaryCount">—</strong></article>
+          </div>
+          <div id="executiveSalesTrendChart" aria-live="polite">
+            <div class="empty-chart">Loading trend data…</div>
+          </div>
+        </section>
+      `;
+      dashboard.appendChild(view);
+
+      view
+        .querySelectorAll("[data-executive-trend-mode]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.trendMode = button.dataset.executiveTrendMode;
+            renderSelectedExecutiveTrend();
+          });
+        });
+
+      document
+        .querySelectorAll(".dashboard-view-tab:not(#salesTrendsTab)")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.trendsActive = false;
+            document.getElementById("salesTrendsView")?.classList.add("hidden");
+            document.getElementById("salesTrendsTab")?.classList.remove("active");
+            document
+              .getElementById("salesTrendsTab")
+              ?.setAttribute("aria-selected", "false");
+          });
+        });
+
+      updateTrendButtonState(executiveState.trendMode);
+    }
+    function showSalesTrendsView(activate) {
+      const trendsView = document.getElementById("salesTrendsView");
+      const trendsTab = document.getElementById("salesTrendsTab");
+
+      if (!trendsView || !trendsTab) return;
+
+      executiveState.trendsActive = activate !== false;
+      executiveState.monthlyActive = false;
+      document.getElementById("overviewView")?.classList.add("hidden");
+      document.getElementById("slotUtilizationView")?.classList.add("hidden");
+      document.getElementById("monthlySalesView")?.classList.add("hidden");
+      trendsView.classList.remove("hidden");
+
+      document.querySelectorAll(".dashboard-view-tab").forEach((button) => {
+        const active = button.id === "salesTrendsTab";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      if (
+        !executiveState.latestSupport &&
+        !executiveState.supportLoading &&
+        !isBaseDashboardStillLoading()
+      ) {
+        scheduleExecutiveRefresh(0, true);
+      }
+
+      renderSelectedExecutiveTrend();
+    }
+    function renderOverviewSalesMomentum(supportData) {
+      const host = document.getElementById("executiveOverviewSalesMomentum");
+
+      if (!host) return;
+
+      const trendMode = supportData?.trendMode || inferBestTrendMode();
+      const points =
+        supportData?.encodedTrends?.[trendMode] ||
+        supportData?.encodedTrend ||
+        [];
+      const reconciliation = supportData?.reconciliation || {};
+      const filters = supportData?.filtersApplied || {};
+      const encodedCollections = Number(
+        reconciliation.encodedCollections ??
+          points.reduce(
+            (sum, point) => sum + (Number(point.sales) || 0),
+            0,
+          ),
+      );
+      const encodedRows = Number(
+        reconciliation.encodedRows ??
+          (Number(reconciliation.includedRows) || 0) +
+            (Number(reconciliation.excludedRows) || 0),
+      );
+      const groupingLabel = getTrendModeLabel(trendMode);
+      const rangeLabel =
+        filters.startDate && filters.endDate
+          ? `${formatExecutiveDate(filters.startDate)} – ${formatExecutiveDate(filters.endDate)}`
+          : "Selected date range";
+      const tag = document.getElementById("trendBucket");
+
+      if (tag) tag.textContent = `${groupingLabel} view`;
+
+      if (!points.length) {
+        host.innerHTML = `
+          <div class="executive-overview-summary">
+            <div class="executive-overview-total">
+              <span>Total sales</span>
+              <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
+            </div>
+            <div class="executive-overview-meta">
+              ${escapeHtml(formatNumber(encodedRows))} encoded rows<br>
+              ${escapeHtml(rangeLabel)}
+            </div>
+          </div>
+          <div class="empty-chart">No sales data for this selection.</div>
+        `;
+        return;
+      }
+
+      host.innerHTML = `
+        <div class="executive-overview-summary">
+          <div class="executive-overview-total">
+            <span>Total sales</span>
+            <strong>${escapeHtml(formatCurrency(encodedCollections))}</strong>
+          </div>
+          <div class="executive-overview-meta">
+            ${escapeHtml(formatNumber(encodedRows))} matched rows · ${escapeHtml(groupingLabel)} grouping<br>
+            ${escapeHtml(rangeLabel)}
+          </div>
+        </div>
+        <div class="executive-overview-chart" id="executiveOverviewTrendChart"></div>
+      `;
+
+      renderExecutiveTrendChartInto(
+        document.getElementById("executiveOverviewTrendChart"),
+        points,
+        `Sales for ${rangeLabel}`,
+      );
+    }
+    function getTrendModeLabel(mode) {
+      const labels = {
+        DAY: "Daily",
+        WEEK: "Weekly",
+        MONTH: "Monthly",
+        YEAR: "Yearly",
+      };
+
+      return labels[mode] || "Automatic";
+    }
+    function renderSelectedExecutiveTrend() {
+      const supportData = executiveState.latestSupport;
+
+      if (!supportData) return;
+
+      const trends = supportData.trends || {};
+      const fallbackMode = supportData.trendMode || inferBestTrendMode();
+
+      if (!trends[executiveState.trendMode]) {
+        executiveState.trendMode = fallbackMode;
+      }
+
+      const points =
+        trends[executiveState.trendMode] || supportData.trend || [];
+
+      updateTrendButtonState(executiveState.trendMode);
+      renderTrendSummary(points);
+      renderExecutiveTrendChart(points);
+    }
+    function renderTrendSummary(rawPoints) {
+      const points = (rawPoints || []).map((point) => ({
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+      }));
+      const total = points.reduce((sum, point) => sum + point.sales, 0);
+      const average = points.length ? total / points.length : 0;
+      const peak = points.length
+        ? points.reduce(
+            (winner, point) => (point.sales > winner.sales ? point : winner),
+            points[0],
+          )
+        : null;
+
+      setText("trendSummaryTotal", formatCurrency(total));
+      setText("trendSummaryAverage", formatCurrency(average));
+      setText(
+        "trendSummaryPeak",
+        peak ? `${peak.label} · ${formatCompactCurrency(peak.sales)}` : "—",
+      );
+      setText("trendSummaryCount", formatNumber(points.length));
+    }
+    function updateTrendButtonState(activeMode) {
+      document
+        .querySelectorAll("[data-executive-trend-mode]")
+        .forEach((button) => {
+          const active = button.dataset.executiveTrendMode === activeMode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+    }
+    function addReconciliationStrip() {
+      const kpiGrid = document.querySelector(".kpi-grid");
+
+      if (!kpiGrid || document.getElementById("executiveReconciliation")) return;
+
+      const strip = document.createElement("section");
+      strip.id = "executiveReconciliation";
+      strip.className = "executive-reconciliation";
+      strip.setAttribute("aria-label", "Sales reconciliation");
+      strip.innerHTML = `
+        <article class="executive-reconciliation-card rule">
+          <span>Reporting rule</span>
+          <strong>Sales Trends follows the DlySLSTrd reporting basis.</strong>
+        </article>
+        <article class="executive-reconciliation-card excluded">
+          <span>Adjustments</span>
+          <strong id="executiveNonAmount">—</strong>
+        </article>
+        <article class="executive-reconciliation-card excluded">
+          <span>Reissued records</span>
+          <strong id="executiveReprintAmount">—</strong>
+        </article>
+        <article class="executive-reconciliation-card">
+          <span>Total encoded</span>
+          <strong id="executiveEncodedAmount">—</strong>
+        </article>
+      `;
+
+      kpiGrid.insertAdjacentElement("afterend", strip);
+    }
+    function inferBestTrendMode() {
+      const start = document.getElementById("startDate")?.value;
+      const end = document.getElementById("endDate")?.value;
+
+      if (!start || !end) return "DAY";
+
+      const dayCount =
+        Math.floor((parseIsoDate(end) - parseIsoDate(start)) / 86400000) + 1;
+
+      if (dayCount <= 62) return "DAY";
+      if (dayCount <= 400) return "WEEK";
+      if (dayCount <= 1460) return "MONTH";
+      return "YEAR";
+    }

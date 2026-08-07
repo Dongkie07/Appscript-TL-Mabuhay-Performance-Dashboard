@@ -1,0 +1,401 @@
+<script>
+  (() => {
+    "use strict";
+
+    const slotSharingState = {
+      active: false,
+      loading: false,
+      requestVersion: 0,
+      currentData: null,
+      cache: Object.create(null),
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeSlotSharing);
+    } else {
+      initializeSlotSharing();
+    }
+
+    function initializeSlotSharing() {
+      const tab = document.getElementById("slotUtilizationTab");
+      const applyButton = document.getElementById("applyButton");
+      const refreshButton = document.getElementById("refreshButton");
+      const serviceFilter = document.getElementById(
+        "slotSharingServiceFilter",
+      );
+      const searchInput = document.getElementById("slotSharingSearch");
+
+      tab?.addEventListener("click", () => {
+        slotSharingState.active = true;
+        window.setTimeout(() => loadSlotSharing(false), 0);
+      });
+
+      document.getElementById("overviewTab")?.addEventListener("click", () => {
+        slotSharingState.active = false;
+      });
+
+      applyButton?.addEventListener("click", () => {
+        if (!slotSharingState.active) return;
+        window.setTimeout(() => loadSlotSharing(false), 0);
+      });
+
+      refreshButton?.addEventListener("click", () => {
+        slotSharingState.cache = Object.create(null);
+        slotSharingState.currentData = null;
+
+        if (slotSharingState.active) {
+          window.setTimeout(() => loadSlotSharing(true), 0);
+        }
+      });
+
+      serviceFilter?.addEventListener("change", renderSlotSharing);
+      searchInput?.addEventListener("input", renderSlotSharing);
+    }
+
+    function loadSlotSharing(forceRefresh) {
+      if (!slotSharingState.active || slotSharingState.loading) return;
+
+      const filters = readSlotSharingFilters(forceRefresh === true);
+      const cacheKey = getSlotSharingCacheKey(filters);
+
+      if (!forceRefresh && slotSharingState.cache[cacheKey]) {
+        slotSharingState.currentData = slotSharingState.cache[cacheKey];
+        renderSlotSharing();
+        return;
+      }
+
+      if (!isSlotSharingAppsScriptRuntime()) {
+        renderSlotSharingFailure(
+          "Slot sharing is available in the deployed Apps Script web app.",
+        );
+        return;
+      }
+
+      const requestVersion = slotSharingState.requestVersion + 1;
+      slotSharingState.requestVersion = requestVersion;
+      slotSharingState.loading = true;
+      setSlotSharingStatus("Loading slot-sharing data…");
+      renderSlotSharingLoading();
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (requestVersion !== slotSharingState.requestVersion) return;
+
+          slotSharingState.loading = false;
+          slotSharingState.currentData = response || {};
+          slotSharingState.cache[cacheKey] = response || {};
+          renderSlotSharing();
+        })
+        .withFailureHandler((error) => {
+          if (requestVersion !== slotSharingState.requestVersion) return;
+
+          slotSharingState.loading = false;
+          renderSlotSharingFailure(
+            error?.message || String(error || "Unable to load slot sharing."),
+          );
+        })
+        .getSlotSharingData(filters);
+    }
+
+    function readSlotSharingFilters(forceRefresh) {
+      return {
+        startDate: document.getElementById("startDate")?.value || "",
+        endDate: document.getElementById("endDate")?.value || "",
+        region: document.getElementById("regionFilter")?.value || "ALL",
+        branch: document.getElementById("branchFilter")?.value || "ALL",
+        forceRefresh: forceRefresh === true,
+      };
+    }
+
+    function getSlotSharingCacheKey(filters) {
+      return [
+        filters.startDate,
+        filters.endDate,
+        filters.region,
+        filters.branch,
+      ].join("|");
+    }
+
+    function renderSlotSharing() {
+      const data = slotSharingState.currentData || {};
+      const rawRows = Array.isArray(data.relationships)
+        ? data.relationships
+        : [];
+      const serviceFilter =
+        document.getElementById("slotSharingServiceFilter")?.value || "ALL";
+      const search = String(
+        document.getElementById("slotSharingSearch")?.value || "",
+      )
+        .trim()
+        .toLowerCase();
+      const rows = rawRows.filter((row) => {
+        if (serviceFilter !== "ALL" && row.service !== serviceFilter) {
+          return false;
+        }
+
+        if (!search) return true;
+
+        return [
+          row.lender,
+          row.borrower,
+          row.lenderRegion,
+          row.borrowerRegion,
+          row.service,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+      });
+
+      const totals = calculateSlotSharingTotals(rows);
+      setSlotSharingText("slotSharingTotalSlots", formatSlotSharingCount(totals.slots));
+      setSlotSharingText(
+        "slotSharingSlotBreakdown",
+        `TDC ${formatSlotSharingCount(totals.tdcSlots)} · PDC ${formatSlotSharingCount(totals.pdcSlots)}`,
+      );
+      setSlotSharingText(
+        "slotSharingTransactions",
+        formatSlotSharingCount(totals.transactions),
+      );
+      setSlotSharingText(
+        "slotSharingSales",
+        formatSlotSharingCurrency(totals.sales),
+      );
+      setSlotSharingText(
+        "slotSharingUnknown",
+        formatSlotSharingCount(totals.unknown),
+      );
+      setSlotSharingText(
+        "slotSharingCount",
+        `${formatSlotSharingCount(rows.length)} relationship rows`,
+      );
+
+      renderSlotSharingRankings(rows);
+      renderSlotSharingRows(rows);
+
+      const applied = data.filtersApplied || {};
+      const period =
+        applied.startDate && applied.endDate
+          ? `${formatSlotSharingDate(applied.startDate)} – ${formatSlotSharingDate(applied.endDate)}`
+          : "Selected period";
+      const cacheLabel = data.cacheStatus === "HIT" ? "cached" : "prepared";
+      setSlotSharingStatus(`${period} · ${cacheLabel}`);
+
+      const note = document.getElementById("slotSharingNote");
+      if (note) {
+        note.textContent = data.truncated
+          ? "The table shows the first available records after server aggregation. Refine the date or branch filters for a smaller result."
+          : "Lender is based on Final Branch (SOURCE), with SOURCE input as fallback. Borrower is based on COLLECTION BRANCH.";
+      }
+    }
+
+    function calculateSlotSharingTotals(rows) {
+      return rows.reduce(
+        (totals, row) => {
+          const slots = Number(row.slots) || 0;
+          totals.slots += slots;
+          totals.transactions += Number(row.transactions) || 0;
+          totals.sales += Number(row.sales) || 0;
+
+          if (row.service === "TDC") totals.tdcSlots += slots;
+          if (row.service === "PDC") totals.pdcSlots += slots;
+          if (row.sourceKnown === false) totals.unknown += 1;
+
+          return totals;
+        },
+        {
+          slots: 0,
+          tdcSlots: 0,
+          pdcSlots: 0,
+          transactions: 0,
+          sales: 0,
+          unknown: 0,
+        },
+      );
+    }
+
+    function renderSlotSharingRankings(rows) {
+      const lenders = buildSlotSharingRanking(rows, "lender", "lenderRegion");
+      const borrowers = buildSlotSharingRanking(
+        rows,
+        "borrower",
+        "borrowerRegion",
+      );
+
+      renderSlotSharingRanking("slotSharingTopLenders", lenders);
+      renderSlotSharingRanking("slotSharingTopBorrowers", borrowers);
+    }
+
+    function buildSlotSharingRanking(rows, nameField, regionField) {
+      const map = Object.create(null);
+
+      rows.forEach((row) => {
+        const name = String(row[nameField] || "Unspecified");
+        const key = name.toUpperCase();
+
+        if (!map[key]) {
+          map[key] = {
+            name,
+            region: row[regionField] || "Unspecified",
+            slots: 0,
+            sales: 0,
+          };
+        }
+
+        map[key].slots += Number(row.slots) || 0;
+        map[key].sales += Number(row.sales) || 0;
+      });
+
+      return Object.values(map)
+        .sort((first, second) => {
+          if (second.slots !== first.slots) {
+            return second.slots - first.slots;
+          }
+
+          return second.sales - first.sales;
+        })
+        .slice(0, 5);
+    }
+
+    function renderSlotSharingRanking(hostId, items) {
+      const host = document.getElementById(hostId);
+      if (!host) return;
+
+      if (!items.length) {
+        host.innerHTML = '<div class="slot-sharing-empty">No matching records.</div>';
+        return;
+      }
+
+      host.innerHTML = items
+        .map(
+          (item) => `
+            <div class="slot-sharing-rank-row">
+              <span title="${escapeSlotSharingHtml(item.name)} · ${escapeSlotSharingHtml(item.region)}">
+                ${escapeSlotSharingHtml(item.name)}
+              </span>
+              <strong>${formatSlotSharingCount(item.slots)} slots</strong>
+            </div>
+          `,
+        )
+        .join("");
+    }
+
+    function renderSlotSharingRows(rows) {
+      const body = document.getElementById("slotSharingTableBody");
+      if (!body) return;
+
+      if (!rows.length) {
+        body.innerHTML = `
+          <tr>
+            <td colspan="7" class="slot-sharing-empty">
+              No slot-sharing records match the selected filters.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      body.innerHTML = rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${escapeSlotSharingHtml(formatSlotSharingDate(row.date))}</td>
+              <td><span class="slot-sharing-service">${escapeSlotSharingHtml(row.service)}</span></td>
+              <td class="${row.sourceKnown === false ? "slot-sharing-source-pending" : ""}">
+                <strong>${escapeSlotSharingHtml(row.lender)}</strong><br>
+                <small>${escapeSlotSharingHtml(row.lenderRegion)}</small>
+              </td>
+              <td>
+                <strong>${escapeSlotSharingHtml(row.borrower)}</strong><br>
+                <small>${escapeSlotSharingHtml(row.borrowerRegion)}</small>
+              </td>
+              <td class="number mono">${formatSlotSharingCount(row.slots)}</td>
+              <td class="number mono">${formatSlotSharingCount(row.transactions)}</td>
+              <td class="number mono">${formatSlotSharingCurrency(row.sales)}</td>
+            </tr>
+          `,
+        )
+        .join("");
+    }
+
+    function renderSlotSharingLoading() {
+      const body = document.getElementById("slotSharingTableBody");
+      if (!body) return;
+
+      body.innerHTML = `
+        <tr>
+          <td colspan="7" class="slot-sharing-empty">
+            Loading lender and borrower relationships…
+          </td>
+        </tr>
+      `;
+    }
+
+    function renderSlotSharingFailure(message) {
+      setSlotSharingStatus("Unable to load");
+      const body = document.getElementById("slotSharingTableBody");
+      if (!body) return;
+
+      body.innerHTML = `
+        <tr>
+          <td colspan="7" class="slot-sharing-empty">
+            ${escapeSlotSharingHtml(message)}
+          </td>
+        </tr>
+      `;
+    }
+
+    function setSlotSharingStatus(value) {
+      setSlotSharingText("slotSharingStatus", value);
+    }
+
+    function setSlotSharingText(id, value) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = String(value ?? "");
+    }
+
+    function isSlotSharingAppsScriptRuntime() {
+      return (
+        typeof google !== "undefined" &&
+        google.script &&
+        google.script.run
+      );
+    }
+
+    function formatSlotSharingCurrency(value) {
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    }
+
+    function formatSlotSharingCount(value) {
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    }
+
+    function formatSlotSharingDate(value) {
+      const parts = String(value || "").split("-").map(Number);
+      const date = new Date(parts[0], parts[1] - 1, parts[2]);
+
+      if (Number.isNaN(date.getTime())) return String(value || "—");
+
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+    }
+
+    function escapeSlotSharingHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  })();
+</script>

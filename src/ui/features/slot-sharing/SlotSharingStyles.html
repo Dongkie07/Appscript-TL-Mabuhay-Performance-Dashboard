@@ -1,0 +1,251 @@
+<style>
+  .slot-sharing-panel {
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    display: grid;
+    gap: 16px;
+    margin-top: 18px;
+    padding: 20px;
+  }
+
+  .slot-sharing-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+  }
+
+  .slot-sharing-header p {
+    margin: 5px 0 0;
+  }
+
+  .slot-sharing-eyebrow {
+    color: #8a6b25;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .slot-sharing-status {
+    background: #f7f1e5;
+    border: 1px solid #e7dbc4;
+    border-radius: 999px;
+    color: #536070;
+    font-size: 11px;
+    padding: 8px 11px;
+    white-space: nowrap;
+  }
+
+  .slot-sharing-kpis {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .slot-sharing-kpis article {
+    background: #fbfaf7;
+    border: 1px solid #ebe2d3;
+    border-radius: 14px;
+    display: grid;
+    gap: 6px;
+    min-height: 100px;
+    padding: 14px;
+  }
+
+  .slot-sharing-kpis article.quality {
+    background: #fff8ec;
+  }
+
+  .slot-sharing-kpis span,
+  .slot-sharing-toolbar label > span {
+    color: #667085;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .slot-sharing-kpis strong {
+    color: #0b1f3a;
+    font-size: 22px;
+  }
+
+  .slot-sharing-kpis small {
+    color: #768092;
+    font-size: 11px;
+  }
+
+  .slot-sharing-toolbar {
+    align-items: end;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(170px, 0.6fr) minmax(260px, 1.4fr) auto;
+  }
+
+  .slot-sharing-toolbar label {
+    display: grid;
+    gap: 6px;
+  }
+
+  .slot-sharing-toolbar select,
+  .slot-sharing-toolbar input {
+    background: #ffffff;
+    border: 1px solid #ded4c1;
+    border-radius: 10px;
+    color: #0b1f3a;
+    font: inherit;
+    min-height: 42px;
+    padding: 9px 11px;
+  }
+
+  .slot-sharing-count {
+    color: #667085;
+    font-size: 11px;
+    padding: 0 2px 11px;
+    text-align: right;
+  }
+
+  .slot-sharing-leaders {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .slot-sharing-leaders article {
+    border: 1px solid #e8dfd0;
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .slot-sharing-leaders h3 {
+    color: #0b1f3a;
+    font-size: 13px;
+    margin: 0 0 10px;
+  }
+
+  .slot-sharing-ranking {
+    display: grid;
+    gap: 7px;
+  }
+
+  .slot-sharing-rank-row {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .slot-sharing-rank-row span {
+    color: #536070;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .slot-sharing-rank-row strong {
+    color: #0b1f3a;
+    font-size: 11px;
+  }
+
+  .slot-sharing-table-wrap {
+    border: 1px solid #e8dfd0;
+    border-radius: 14px;
+    max-height: 520px;
+    overflow: auto;
+  }
+
+  .slot-sharing-table {
+    border-collapse: collapse;
+    min-width: 940px;
+    width: 100%;
+  }
+
+  .slot-sharing-table th {
+    background: #f7f4ee;
+    color: #536070;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    position: sticky;
+    text-transform: uppercase;
+    top: 0;
+    z-index: 1;
+  }
+
+  .slot-sharing-table th,
+  .slot-sharing-table td {
+    border-bottom: 1px solid #eee7db;
+    padding: 11px 12px;
+    text-align: left;
+  }
+
+  .slot-sharing-table td {
+    color: #344054;
+    font-size: 12px;
+  }
+
+  .slot-sharing-table .number {
+    text-align: right;
+  }
+
+  .slot-sharing-service {
+    background: #eef3f8;
+    border-radius: 999px;
+    color: #173a63;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 5px 8px;
+  }
+
+  .slot-sharing-source-pending {
+    color: #a15d00;
+    font-style: italic;
+  }
+
+  .slot-sharing-empty {
+    color: #7a8494 !important;
+    padding: 28px !important;
+    text-align: center !important;
+  }
+
+  .slot-sharing-note {
+    color: #7a8494;
+    font-size: 11px;
+    margin: 0;
+  }
+
+  @media (max-width: 1100px) {
+    .slot-sharing-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 760px) {
+    .slot-sharing-header {
+      flex-direction: column;
+    }
+
+    .slot-sharing-toolbar,
+    .slot-sharing-leaders {
+      grid-template-columns: 1fr;
+    }
+
+    .slot-sharing-count {
+      padding: 0;
+      text-align: left;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .slot-sharing-kpis {
+      grid-template-columns: 1fr;
+    }
+
+    .slot-sharing-panel {
+      padding: 15px;
+    }
+  }
+</style>

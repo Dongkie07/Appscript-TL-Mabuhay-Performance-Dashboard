@@ -1,0 +1,370 @@
+    function renderSlotUtilizationRows() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const courseData = getSelectedCapacityCourse();
+      const host = getElementById("slotUtilizationRows");
+
+      if (!courseData) {
+        return;
+      }
+
+      const visibleBranches = filterAndSortCapacityBranches(
+        courseData.branches,
+      );
+
+      host.replaceChildren(
+        ...visibleBranches.map(createSlotLedgerRow),
+      );
+
+      if (!visibleBranches.length) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "slot-ledger-empty";
+        emptyState.textContent =
+          "No branches match this utilization filter.";
+        host.appendChild(emptyState);
+      }
+
+      getElementById("slotBranchCount").textContent =
+        `${formatCount(visibleBranches.length)} of ` +
+        `${formatCount(courseData.branches.length)} branches`;
+      getElementById("slotLedgerSubtitle").textContent =
+        `${dashboardState.slotCourse.toUpperCase()} current status uses each branch’s latest usable record. Select a row for full TDC and PDC detail.`;
+    }
+    function filterAndSortCapacityBranches(branches) {
+      const searchText = getElementById("slotBranchSearch")
+        .value.trim()
+        .toLowerCase();
+      const selectedLevel =
+        getElementById("slotLevelFilter").value;
+      const selectedSort = getElementById("slotSort").value;
+      const filteredBranches = branches.filter((branch) => {
+        const matchesSearch =
+          !searchText ||
+          branch.branchName.toLowerCase().includes(searchText) ||
+          branch.region.toLowerCase().includes(searchText);
+        const level = getSlotUtilizationLevel(
+          branch.latest.utilization,
+        );
+        const matchesLevel =
+          selectedLevel === "all" || selectedLevel === level;
+
+        return matchesSearch && matchesLevel;
+      });
+
+      filteredBranches.sort((firstBranch, secondBranch) =>
+        compareCapacityRows(
+          firstBranch,
+          secondBranch,
+          selectedSort,
+        ),
+      );
+
+      return filteredBranches;
+    }
+    function compareCapacityRows(
+      firstBranch,
+      secondBranch,
+      selectedSort,
+    ) {
+      if (selectedSort === "branchName") {
+        return firstBranch.branchName.localeCompare(
+          secondBranch.branchName,
+        );
+      }
+
+      if (selectedSort === "idleDesc") {
+        return (
+          (secondBranch.latest.idle || 0) -
+          (firstBranch.latest.idle || 0)
+        );
+      }
+
+      if (selectedSort === "decliningFirst") {
+        const trendOrder = {
+          DECLINING: 0,
+          STABLE: 1,
+          GROWING: 2,
+          INSUFFICIENT_DATA: 3,
+        };
+        const trendDifference =
+          trendOrder[firstBranch.trend.status] -
+          trendOrder[secondBranch.trend.status];
+
+        if (trendDifference !== 0) {
+          return trendDifference;
+        }
+      }
+
+      const firstUtilization =
+        firstBranch.latest.utilization;
+      const secondUtilization =
+        secondBranch.latest.utilization;
+
+      if (firstUtilization == null) {
+        return secondUtilization == null ? 0 : 1;
+      }
+
+      if (secondUtilization == null) {
+        return -1;
+      }
+
+      if (selectedSort === "utilizationDesc") {
+        return secondUtilization - firstUtilization;
+      }
+
+      return firstUtilization - secondUtilization;
+    }
+    function createSlotLedgerRow(branch) {
+      const row = document.createElement("button");
+      const latest = branch.latest;
+      const previous = branch.previous;
+      const level = getSlotUtilizationLevel(
+        latest.utilization,
+      );
+      const presentation = getTrendPresentation(
+        branch.trend.status,
+      );
+
+      row.type = "button";
+      row.className = "slot-ledger-row";
+      row.dataset.slotBranchKey = branch.branchKey;
+      row.setAttribute(
+        "aria-label",
+        `View TDC and PDC slot utilization for ${branch.branchName}`,
+      );
+
+      row.append(
+        createSlotBranchIdentity(branch),
+        createSlotRecordCell(branch),
+        createSlotAllocationCell(latest),
+        createSlotMeterCell(branch, level),
+        createSlotUtilizationCell(branch, level),
+        createSlotTrendCell(branch, presentation),
+      );
+
+      return row;
+    }
+    function createSlotBranchIdentity(branch) {
+      const cell = document.createElement("span");
+      cell.className = "slot-ledger-branch";
+      const name = document.createElement("strong");
+      name.textContent = branch.branchName;
+      const region = document.createElement("small");
+      region.textContent = branch.region;
+      const arrow = document.createElement("i");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+      cell.append(name, region, arrow);
+      return cell;
+    }
+    function createSlotRecordCell(branch) {
+      const cell = document.createElement("span");
+      const titleRow = document.createElement("span");
+      const current = document.createElement("strong");
+      const average = document.createElement("small");
+      const dataQuality = getSlotDataQuality(branch);
+      const freshness = getSlotFreshness(branch);
+      const hasSlotRecord = Boolean(
+        branch.latest.periodLabel ||
+          branch.latest.allocated != null ||
+          branch.latest.used != null,
+      );
+
+      cell.className = "slot-record-cell";
+      titleRow.className = "slot-record-title-row";
+
+      current.textContent = hasSlotRecord
+        ? branch.latest.periodLabel || "Latest available"
+        : "No record in selected period";
+
+      titleRow.appendChild(current);
+
+      if (freshness.label) {
+        const freshnessBadge = document.createElement("span");
+        freshnessBadge.className =
+          `slot-freshness-badge ${freshness.status.toLowerCase()}`;
+        freshnessBadge.textContent = freshness.label;
+        titleRow.appendChild(freshnessBadge);
+      }
+
+      average.textContent =
+        branch.periodAverage.reports <= 0
+          ? "No usable weekly slot records"
+          : branch.periodAverage.utilization == null
+            ? `${formatCount(
+                branch.periodAverage.reports,
+              )} recorded weeks · no usable percentage`
+            : `${formatPercent(
+                branch.periodAverage.utilization,
+              )} period average · ${formatCount(
+                branch.periodAverage.reports,
+              )} records`;
+
+      cell.append(titleRow, average);
+
+      if (dataQuality.code !== "OK") {
+        const issue = document.createElement("small");
+        issue.className = "slot-record-issue";
+        issue.textContent = dataQuality.label;
+        cell.appendChild(issue);
+      }
+
+      return cell;
+    }
+    function createSlotAllocationCell(latest) {
+      const cell = document.createElement("span");
+      cell.className = "slot-allocation-cell mono";
+      const value = document.createElement("strong");
+      value.textContent =
+        latest.allocated == null
+          ? "—"
+          : formatCount(latest.allocated);
+      const label = document.createElement("small");
+      label.textContent = "slots";
+      cell.append(value, label);
+      return cell;
+    }
+    function createSlotMeterCell(branch, level) {
+      const latest = branch.latest;
+      const dataQuality = getSlotDataQuality(branch);
+      const cell = document.createElement("span");
+      const meter = document.createElement("span");
+      const label = document.createElement("small");
+      const utilization = Number(latest.utilization) || 0;
+      const activeSegments = Math.round(
+        Math.min(Math.max(utilization, 0), 100) / 5,
+      );
+
+      cell.className = "slot-meter-cell";
+      meter.className = `slot-segment-meter ${level}`;
+      meter.setAttribute("aria-hidden", "true");
+
+      for (
+        let segmentIndex = 0;
+        segmentIndex < 20;
+        segmentIndex += 1
+      ) {
+        const segment = document.createElement("i");
+        segment.classList.toggle(
+          "active",
+          segmentIndex < activeSegments,
+        );
+        meter.appendChild(segment);
+      }
+
+      label.className = "mono";
+
+      if (latest.allocated == null && latest.used != null) {
+        label.textContent =
+          `${formatCount(latest.used)} used · allocation missing`;
+      } else if (latest.allocated == null) {
+        label.textContent = "No usable allocation";
+      } else if (latest.used == null) {
+        label.textContent =
+          `${formatCount(latest.allocated)} allocated · usage missing`;
+      } else if (latest.utilization == null) {
+        label.textContent = dataQuality.label;
+      } else {
+        label.textContent =
+          `${formatCount(latest.used)} used · ` +
+          `${formatCount(latest.idle)} idle`;
+      }
+
+      cell.append(meter, label);
+      return cell;
+    }
+    function createSlotUtilizationCell(branch, level) {
+      const cell = document.createElement("span");
+      cell.className = "slot-utilization-cell mono";
+      const value = document.createElement("strong");
+      value.className = level;
+      value.textContent =
+        branch.latest.utilization == null
+          ? "—"
+          : formatPercent(branch.latest.utilization);
+      const label = document.createElement("small");
+      label.textContent = getSlotUtilizationLevelLabel(level);
+      cell.append(value, label);
+      return cell;
+    }
+    function createSlotTrendCell(branch, presentation) {
+      const trend = branch.trend;
+      const previous = branch.previous;
+      const utilization = branch.latest.utilization;
+      const cell = document.createElement("span");
+      const badge = document.createElement("span");
+      const comparison = document.createElement("small");
+      const action = document.createElement("em");
+
+      cell.className = "slot-ledger-trend";
+      badge.className =
+        `slot-trend-badge ${presentation.className}`;
+      badge.textContent =
+        `${presentation.symbol} ${presentation.label}`;
+      comparison.className = "mono";
+      comparison.textContent =
+        trend.changePercentagePoints == null
+          ? "No prior usable slot record"
+          : `${formatSignedPercentagePoints(
+              trend.changePercentagePoints,
+            )} vs ${previous.periodLabel}`;
+      action.textContent =
+        getSlotUtilizationAction(utilization, branch);
+      cell.append(badge, comparison, action);
+      return cell;
+    }
+    function getSlotUtilizationLevel(utilization) {
+      if (utilization == null) {
+        return "noData";
+      }
+
+      if (utilization > 100) {
+        return "overCapacity";
+      }
+
+      if (utilization < 35) {
+        return "low";
+      }
+
+      if (utilization < 70) {
+        return "moderate";
+      }
+
+      return "high";
+    }
+    function getSlotUtilizationLevelLabel(level) {
+      const labels = {
+        low: "Low use",
+        moderate: "Moderate",
+        high: "Healthy use",
+        overCapacity: "Over allocation",
+        noData: "No data",
+      };
+
+      return labels[level];
+    }
+    function getSlotUtilizationAction(utilization, branch) {
+      if (utilization == null) {
+        return getSlotDataQuality(branch).action;
+      }
+
+      if (utilization > 100) {
+        return "Over allocation — validate used slots and capacity";
+      }
+
+      if (utilization < 35) {
+        return "Review allocation or redistribute idle slots";
+      }
+
+      if (utilization < 70) {
+        return "Build bookings within the branch";
+      }
+
+      if (utilization < 90) {
+        return "Healthy use — monitor";
+      }
+
+      return "Near capacity — review additional slots";
+    }

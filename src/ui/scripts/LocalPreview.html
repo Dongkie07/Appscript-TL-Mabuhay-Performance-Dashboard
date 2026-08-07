@@ -1,0 +1,452 @@
+    function buildPreviewData() {
+      const branches = [
+        createPreviewBranch(
+          "TL Test Central",
+          "Region 6",
+          640000,
+          550000,
+          310,
+          88000,
+          74,
+          58,
+        ),
+        createPreviewBranch(
+          "TL Test Riverside",
+          "Region 7",
+          515000,
+          500000,
+          246,
+          72000,
+          83,
+          67,
+        ),
+        createPreviewBranch(
+          "TL Test North",
+          "Region 6",
+          438000,
+          470000,
+          221,
+          69000,
+          62,
+          49,
+        ),
+        createPreviewBranch(
+          "TL Test South",
+          "Region 11",
+          382000,
+          450000,
+          198,
+          81000,
+          55,
+          43,
+        ),
+        createPreviewBranch(
+          "TL Test Island",
+          "NIR",
+          295000,
+          360000,
+          147,
+          61000,
+          46,
+          null,
+        ),
+        createPreviewBranch(
+          "TL Test East",
+          "Region 7",
+          248000,
+          320000,
+          123,
+          57000,
+          31,
+          28,
+        ),
+      ];
+      const sales = branches.reduce((sum, item) => sum + item.sales, 0);
+      const target = branches.reduce((sum, item) => sum + item.target, 0);
+      const transactions = branches.reduce(
+        (sum, item) => sum + item.transactions,
+        0,
+      );
+      const expenses = branches.reduce((sum, item) => sum + item.expenses, 0);
+
+      return {
+        meta: {
+          spreadsheetName: "Converted workbook — preview",
+          readOnly: true,
+          refreshedAt: "2026-07-30 13:00:00",
+          dataAsOf: "2026-07-29",
+          trendBucket: "DAY",
+        },
+        availableDateRange: { min: "2026-06-01", max: "2026-07-29" },
+        filtersApplied: {
+          startDate: "2026-07-01",
+          endDate: "2026-07-29",
+          region: "ALL",
+          branch: "ALL",
+        },
+        options: {
+          regions: ["NIR", "Region 6", "Region 7", "Region 11"],
+          branches: branches.map((item) => ({
+            branchKey: item.branchKey,
+            branchName: item.branchName,
+            region: item.region,
+          })),
+        },
+        kpis: {
+          sales,
+          target,
+          targetAchievement: (sales / target) * 100,
+          transactions,
+          averageTicket: sales / transactions,
+          customers: 1090,
+          expenses,
+          salesLessDisbursements: sales - expenses,
+          tdcUtilization: 62.8,
+          tdcTrend: createPreviewUtilizationTrend(62.8, 7.5),
+          pdcUtilization: 51.7,
+          pdcTrend: createPreviewUtilizationTrend(51.7, -6.2),
+        },
+        charts: {
+          salesTrend: [
+            ["Jul 1", 162000],
+            ["Jul 5", 221000],
+            ["Jul 9", 197000],
+            ["Jul 13", 284000],
+            ["Jul 17", 239000],
+            ["Jul 21", 326000],
+            ["Jul 25", 301000],
+            ["Jul 29", 388000],
+          ].map((item, index) => ({
+            key: `2026-07-${String(index * 4 + 1).padStart(2, "0")}`,
+            label: item[0],
+            sales: item[1],
+            transactions: 0,
+          })),
+          serviceMix: [
+            { label: "PDC", value: 1275000 },
+            { label: "TDC", value: 812000 },
+            { label: "DL", value: 216000 },
+            { label: "CDE", value: 132000 },
+            { label: "Other", value: 83000 },
+          ],
+          customerMix: [
+            { label: "Walk-In", value: 716 },
+            { label: "Referral", value: 218 },
+            { label: "Company / Corporate", value: 107 },
+            { label: "Other", value: 49 },
+          ],
+          expenseMix: [
+            { label: "Operating Expenses", value: 218000 },
+            { label: "Cost of Service", value: 155000 },
+            { label: "Bank & Other Charges", value: 56000 },
+          ],
+          topBranches: branches.map((item) => ({
+            label: item.branchName,
+            value: item.sales,
+            target: item.target,
+          })),
+        },
+        capacity: createPreviewCapacityView(branches),
+        branches,
+        health: {
+          salesRowsMatched: 684,
+          branchesMatched: branches.length,
+        },
+      };
+    }
+    function createPreviewBranch(
+      branchName,
+      region,
+      sales,
+      target,
+      transactions,
+      expenses,
+      tdcUtilization,
+      pdcUtilization,
+    ) {
+      return {
+        branchKey: branchName.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+        branchName,
+        region,
+        sales,
+        target,
+        targetAchievement: (sales / target) * 100,
+        transactions,
+        averageTicket: sales / transactions,
+        customers: transactions,
+        expenses,
+        salesLessDisbursements: sales - expenses,
+        tdcAllocated: tdcUtilization == null ? null : 100,
+        tdcUsed: tdcUtilization,
+        tdcUtilization,
+        pdcAllocated: pdcUtilization == null ? null : 100,
+        pdcUsed: pdcUtilization,
+        pdcUtilization,
+        tdcTrend: createPreviewUtilizationTrend(
+          tdcUtilization,
+          6.4,
+        ),
+        pdcTrend: createPreviewUtilizationTrend(
+          pdcUtilization,
+          -7.2,
+        ),
+        capacityPeriod: "Week 30, 2026",
+        previousCapacityPeriod: "Week 29, 2026",
+        tdcCapacityPeriod: "Week 30, 2026",
+        tdcPreviousCapacityPeriod: "Week 29, 2026",
+        pdcCapacityPeriod: "Week 30, 2026",
+        pdcPreviousCapacityPeriod: "Week 29, 2026",
+      };
+    }
+    function createPreviewCapacityView(branches) {
+      return {
+        basis: "LATEST_AVAILABLE_PER_BRANCH",
+        tdc: createPreviewCapacityCourse(
+          branches,
+          "tdc",
+          "TDC",
+        ),
+        pdc: createPreviewCapacityCourse(
+          branches,
+          "pdc",
+          "PDC",
+        ),
+      };
+    }
+    function createPreviewCapacityCourse(
+      branches,
+      prefix,
+      courseCode,
+    ) {
+      const courseBranches = branches
+        .filter((branch) => branch[`${prefix}Allocated`] != null)
+        .map((branch) => {
+          const allocated = branch[`${prefix}Allocated`];
+          const used = branch[`${prefix}Used`];
+          const trend = branch[`${prefix}Trend`];
+          const previousUtilization =
+            trend.previousUtilization;
+          const previousUsed =
+            (allocated * previousUtilization) / 100;
+          const periodUsed = used + previousUsed;
+          const periodAllocated = allocated * 2;
+
+          return {
+            branchKey: branch.branchKey,
+            branchName: branch.branchName,
+            region: branch.region,
+            latest: {
+              periodKey: 202630,
+              periodLabel: "Week 30, 2026",
+              allocated,
+              used,
+              idle: Math.max(allocated - used, 0),
+              aboveAllocation: Math.max(used - allocated, 0),
+              utilization: branch[`${prefix}Utilization`],
+            },
+            previous: {
+              periodKey: 202629,
+              periodLabel: "Week 29, 2026",
+              allocated,
+              used: previousUsed,
+              idle: Math.max(allocated - previousUsed, 0),
+              aboveAllocation: Math.max(previousUsed - allocated, 0),
+              utilization: previousUtilization,
+            },
+            trend,
+            periodAverage: {
+              allocated: periodAllocated,
+              used: periodUsed,
+              idle: Math.max(
+                periodAllocated - periodUsed,
+                0,
+              ),
+              utilization:
+                (periodUsed / periodAllocated) * 100,
+              reports: 2,
+            },
+          };
+        });
+
+      const latestAllocated = courseBranches.reduce(
+        (sum, branch) => sum + branch.latest.allocated,
+        0,
+      );
+      const latestUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.latest.used,
+        0,
+      );
+      const previousAllocated = courseBranches.reduce(
+        (sum, branch) => sum + branch.previous.allocated,
+        0,
+      );
+      const previousUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.previous.used,
+        0,
+      );
+      const periodAllocated = courseBranches.reduce(
+        (sum, branch) =>
+          sum + branch.periodAverage.allocated,
+        0,
+      );
+      const periodUsed = courseBranches.reduce(
+        (sum, branch) => sum + branch.periodAverage.used,
+        0,
+      );
+      const currentUtilization =
+        latestAllocated > 0
+          ? (latestUsed / latestAllocated) * 100
+          : null;
+      const previousUtilization =
+        previousAllocated > 0
+          ? (previousUsed / previousAllocated) * 100
+          : null;
+      const movementCounts = {
+        growing: courseBranches.filter(
+          (branch) => branch.trend.status === "GROWING",
+        ).length,
+        stable: courseBranches.filter(
+          (branch) => branch.trend.status === "STABLE",
+        ).length,
+        declining: courseBranches.filter(
+          (branch) => branch.trend.status === "DECLINING",
+        ).length,
+      };
+
+      return {
+        courseCode,
+        summary: {
+          latest: {
+            allocated: latestAllocated,
+            used: latestUsed,
+            idle: Math.max(
+              latestAllocated - latestUsed,
+              0,
+            ),
+            utilization: currentUtilization,
+          },
+          periodAverage: {
+            allocated: periodAllocated,
+            used: periodUsed,
+            idle: Math.max(
+              periodAllocated - periodUsed,
+              0,
+            ),
+            utilization:
+              periodAllocated > 0
+                ? (periodUsed / periodAllocated) * 100
+                : null,
+            reports: courseBranches.length * 2,
+          },
+          trend: createPreviewUtilizationTrend(
+            currentUtilization,
+            currentUtilization - previousUtilization,
+          ),
+          coverage: {
+            branchesWithData: courseBranches.length,
+            branchesWithUtilization: courseBranches.length,
+            comparableBranches: courseBranches.length,
+          },
+          movementCounts,
+        },
+        branches: courseBranches,
+      };
+    }
+    function renderRegionalScorecard() {
+          if (!dashboardState.data || !dashboardState.data.branches) {
+            return;
+          }
+
+          const branchList = dashboardState.data.branches;
+          const regionsMap = Object.create(null);
+
+          // 1. Group branches by region and sum sales & targets
+          branchList.forEach((branch) => {
+            const regionName = branch.region || "Unspecified";
+            if (!regionsMap[regionName]) {
+              regionsMap[regionName] = {
+                region: regionName,
+                branchesCount: 0,
+                sales: 0,
+                target: 0
+              };
+            }
+            regionsMap[regionName].branchesCount += 1;
+            regionsMap[regionName].sales += Number(branch.sales) || 0;
+            regionsMap[regionName].target += Number(branch.target) || 0;
+          });
+
+          // 2. Convert to array and calculate %ach
+          const regionalSummaries = Object.values(regionsMap).map((item) => {
+            const achievement = item.target > 0 ? (item.sales / item.target) * 100 : null;
+            const variance = item.sales - item.target;
+            return {
+              ...item,
+              achievement,
+              variance
+            };
+          });
+
+          // 3. Sort highest achievement first
+          regionalSummaries.sort((a, b) => (b.achievement || 0) - (a.achievement || 0));
+
+          // 4. Render rows into the table
+          const tbody = getElementById("regionalTableBody");
+          if (!tbody) return;
+
+          tbody.replaceChildren();
+
+          regionalSummaries.forEach((reg) => {
+            const tr = document.createElement("tr");
+
+            // Region Name
+            const nameCell = document.createElement("td");
+            nameCell.innerHTML = `<strong>${escapeHtml(reg.region)}</strong>`;
+            tr.appendChild(nameCell);
+
+            // Branch Count
+            tr.appendChild(createNumberCell(formatCount(reg.branchesCount)));
+
+            // Target
+            tr.appendChild(createNumberCell(reg.target > 0 ? formatCurrency(reg.target) : "—"));
+
+            // Actual Sales
+            tr.appendChild(createNumberCell(formatCurrency(reg.sales)));
+
+            // Achievement % Badge (reuses your existing createMetricBadgeCell!)
+            tr.appendChild(createMetricBadgeCell(reg.achievement, "achievement"));
+
+            // Variance
+            const varCell = createNumberCell(formatSignedCurrency(reg.variance));
+            varCell.classList.add(reg.variance >= 0 ? "positive" : "negative-text");
+            tr.appendChild(varCell);
+
+            tbody.appendChild(tr);
+          });}
+    function createPreviewUtilizationTrend(
+      currentUtilization,
+      changePercentagePoints,
+    ) {
+      if (currentUtilization == null) {
+        return {
+          status: "INSUFFICIENT_DATA",
+          changePercentagePoints: null,
+          previousUtilization: null,
+        };
+      }
+
+      let status = "STABLE";
+
+      if (changePercentagePoints > 5) {
+        status = "GROWING";
+      } else if (changePercentagePoints < -5) {
+        status = "DECLINING";
+      }
+
+      return {
+        status,
+        changePercentagePoints,
+        previousUtilization:
+          currentUtilization - changePercentagePoints,
+      };
+    }

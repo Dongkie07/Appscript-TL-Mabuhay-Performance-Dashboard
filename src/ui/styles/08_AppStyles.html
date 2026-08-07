@@ -1,0 +1,381 @@
+<style>
+
+  .slot-coverage-card.issue > strong {
+    color: #8b6508;
+  }
+
+  .slot-coverage-card.stale > strong {
+    color: var(--amber);
+  }
+
+  .slot-coverage-card > small {
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .slot-validation-details {
+    margin-top: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fbfcfd;
+  }
+
+  .slot-validation-details > summary {
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 14px;
+    color: var(--navy);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1.4;
+    list-style: none;
+    touch-action: manipulation;
+  }
+
+  .slot-validation-details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .slot-validation-details > summary:hover {
+    background: #f5f7f9;
+  }
+
+  .slot-validation-details[open] > summary {
+    border-bottom: 1px solid var(--line);
+    background: #f7f9fa;
+  }
+
+  .slot-validation-details > summary span:last-child {
+    color: #8b6508;
+    font-size: 16px;
+    transition: transform 0.16s ease;
+  }
+
+  .slot-validation-details[open] > summary span:last-child {
+    transform: rotate(180deg);
+  }
+
+  .slot-validation-head,
+  .slot-validation-row {
+    display: grid;
+    grid-template-columns:
+      minmax(155px, 1.05fr)
+      minmax(210px, 1.35fr)
+      minmax(120px, 0.75fr)
+      minmax(230px, 1.45fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .slot-validation-head {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .slot-validation-row {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: white;
+  }
+
+  .slot-validation-row:last-child {
+    border-bottom: 0;
+  }
+
+  .slot-validation-row:hover {
+    background: #fffdf8;
+  }
+
+  .slot-validation-cell {
+    min-width: 0;
+  }
+
+  .slot-validation-cell strong,
+  .slot-validation-cell small {
+    display: block;
+  }
+
+  .slot-validation-cell strong {
+    color: var(--ink);
+    font-size: 10px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .slot-validation-cell.branch strong {
+    color: var(--navy);
+    font-size: 11px;
+  }
+
+  .slot-validation-cell.issue strong {
+    color: #8f2632;
+  }
+
+  .slot-validation-cell.stale strong {
+    color: #8b6508;
+  }
+
+  .slot-validation-cell.action strong {
+    color: #765711;
+  }
+
+  .slot-validation-cell small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 8.5px;
+    line-height: 1.35;
+  }
+
+  .slot-validation-empty {
+    padding: 22px 14px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .slot-record-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 7px;
+  }
+
+  .slot-record-title-row > strong {
+    min-width: 0;
+  }
+
+  .slot-freshness-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 8px;
+    font-weight: 850;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .slot-freshness-badge.current {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+
+  .slot-freshness-badge.behind {
+    background: var(--amber-soft);
+    color: #8b6508;
+  }
+
+  .slot-freshness-badge.stale {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+
+  .slot-freshness-badge.no_record {
+    background: #eef1f4;
+    color: var(--muted);
+  }
+
+  .slot-record-cell .slot-record-issue {
+    margin-top: 5px;
+    color: var(--red);
+    font-weight: 750;
+  }
+
+  .slot-utilization-legend i.noData {
+    border: 1px solid #9aa4b2;
+    background: #eef1f4;
+  }
+
+  @media (max-width: 900px) {
+    .slot-coverage-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .slot-validation-head {
+      display: none;
+    }
+
+    .slot-validation-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 13px 18px;
+    }
+
+    .slot-validation-cell::before {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      content: attr(data-label);
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .slot-data-quality-panel {
+      padding: 14px;
+      border-radius: 14px;
+    }
+
+    .slot-data-quality-heading {
+      flex-direction: column;
+    }
+
+    .slot-data-quality-period {
+      max-width: 100%;
+      white-space: normal;
+    }
+
+    .slot-coverage-grid,
+    .slot-validation-row {
+      grid-template-columns: 1fr;
+    }
+
+    .slot-validation-details > summary {
+      min-height: 52px;
+      padding: 12px;
+      font-size: 11px;
+    }
+
+    .slot-validation-row {
+      padding: 13px 12px;
+    }
+
+    .slot-validation-cell strong {
+      font-size: 11px;
+    }
+
+    .slot-freshness-badge {
+      font-size: 8.5px;
+    }
+  }
+
+
+
+  /* v3.2: prevent chart/card overflow in narrow and in-app browsers. */
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .app-shell,
+  main,
+  .chart-grid,
+  .chart-grid > *,
+  .panel,
+  .panel-header > div,
+  .donut-layout,
+  .legend,
+  .legend-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .donut-layout,
+  .legend,
+  .legend-row {
+    width: 100%;
+  }
+
+  .legend-row {
+    grid-template-columns: 9px minmax(0, 1fr) minmax(46px, max-content);
+  }
+
+  .legend-label {
+    min-width: 0;
+  }
+
+  .legend-value {
+    min-width: 46px;
+    justify-self: end;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 760px) {
+    .donut-layout {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .donut {
+      width: min(160px, 52vw);
+    }
+
+    .legend {
+      width: min(100%, 390px);
+      margin-inline: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .panel {
+      overflow: hidden;
+      padding: 14px;
+    }
+
+    .legend-row,
+    .legend-value {
+      font-size: 10.5px;
+    }
+  }
+
+
+
+  /* v3.3: Service Mix responds to the card width, not only the screen width. */
+  .chart-grid > .panel {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 520px) {
+    .donut-layout {
+      grid-template-columns: minmax(0, 1fr) !important;
+      justify-items: center;
+      gap: 16px;
+      min-height: auto;
+      overflow: hidden;
+    }
+
+    .donut {
+      width: min(168px, 58cqw);
+    }
+
+    .legend {
+      width: 100%;
+      max-width: 390px;
+      margin-inline: auto;
+    }
+
+    .legend-row {
+      width: 100%;
+      grid-template-columns: 9px minmax(0, 1fr) max-content;
+    }
+
+    .legend-value {
+      min-width: 48px;
+      justify-self: end;
+      overflow: visible;
+      text-align: right;
+      white-space: nowrap;
+    }
+  }
+</style>

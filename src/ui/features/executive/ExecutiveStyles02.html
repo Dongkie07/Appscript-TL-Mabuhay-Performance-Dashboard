@@ -1,0 +1,216 @@
+<style>
+  .executive-overview-momentum {
+    display: grid;
+    gap: 12px;
+    min-height: 330px;
+  }
+
+  .executive-overview-summary {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 2px 2px 0;
+  }
+
+  .executive-overview-total span {
+    color: #687386;
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+
+  .executive-overview-total strong {
+    color: #0b1f3a;
+    display: block;
+    font-size: clamp(22px, 2.4vw, 32px);
+    line-height: 1;
+  }
+
+  .executive-overview-meta {
+    color: #6f7786;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: right;
+  }
+
+  .executive-overview-chart {
+    min-height: 285px;
+  }
+
+  .executive-overview-chart svg {
+    display: block;
+    height: auto;
+    min-height: 285px;
+    width: 100%;
+  }
+
+
+  .executive-sales-pulse {
+    min-height: 285px;
+    display: grid;
+    align-content: center;
+  }
+
+  .executive-pulse-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .executive-pulse-metric {
+    border: 1px solid #e8dfcf;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #ffffff, #fbf8f1);
+    padding: 14px 15px;
+    min-width: 0;
+  }
+
+  .executive-pulse-metric span {
+    display: block;
+    color: #687386;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+
+  .executive-pulse-metric strong {
+    display: block;
+    color: #0b1f3a;
+    font-size: clamp(17px, 2vw, 24px);
+    line-height: 1.05;
+  }
+
+  .executive-pulse-metric small {
+    display: block;
+    color: #7b8491;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .executive-pulse-sparkline {
+    border: 1px solid #eee5d6;
+    border-radius: 16px;
+    padding: 12px 14px 8px;
+    background: #fffdf9;
+  }
+
+  .executive-pulse-sparkline svg {
+    display: block;
+    width: 100%;
+    height: 92px;
+  }
+
+  .executive-trends-view {
+    padding: 0 0 28px;
+  }
+
+  .executive-trends-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+
+  .executive-trends-hero h2 {
+    margin: 3px 0 4px;
+    color: #0b1f3a;
+  }
+
+  .executive-trends-hero p {
+    margin: 0;
+    color: #697386;
+  }
+
+  .executive-cache-note {
+    border: 1px solid #e5dac5;
+    background: #fffaf0;
+    color: #6b5b35;
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .executive-trends-panel {
+    min-height: 455px;
+  }
+
+  .executive-trend-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 4px 0 12px;
+  }
+
+  .executive-trend-summary article {
+    border: 1px solid #e8dfcf;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #fffdf9;
+  }
+
+  .executive-trend-summary span {
+    display: block;
+    color: #737d8d;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .executive-trend-summary strong {
+    display: block;
+    color: #0b1f3a;
+    font-size: 18px;
+    margin-top: 5px;
+  }
+
+  .executive-monthly-kpi small {
+    display: block;
+    color: #7b8491;
+    margin-top: 6px;
+    font-size: 11px;
+  }
+
+  @media (max-width: 900px) {
+    .executive-pulse-grid,
+    .executive-trend-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .executive-trends-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .executive-overview-summary {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .executive-overview-meta {
+      text-align: left;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .executive-pulse-grid,
+    .executive-trend-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+
+</style>

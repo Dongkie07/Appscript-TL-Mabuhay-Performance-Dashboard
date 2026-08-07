@@ -1,0 +1,340 @@
+    function initializeExecutiveSales() {
+      removeRegionalScorecard();
+      relabelExecutiveKpis();
+      addExecutiveDatePresets();
+      replaceOverviewTrendCard();
+      addMonthlySalesView();
+      addSalesTrendsView();
+      observeDashboardRefreshes();
+      /*
+       * The base dashboard performs the first server request. Executive data
+       * is requested only after that render changes the KPI, preventing two
+       * expensive Apps Script calls from racing during page startup.
+       */
+    }
+    function removeRegionalScorecard() {
+      const regionalTab = document.getElementById("regionalTab");
+      const regionalView = document.getElementById("regionalScorecardView");
+
+      if (regionalTab) regionalTab.remove();
+      if (regionalView) regionalView.remove();
+    }
+    function relabelExecutiveKpis() {
+      const salesCard = document.getElementById("kpiSales")?.closest(".kpi");
+      const targetCard = document.getElementById("kpiTarget")?.closest(".kpi");
+      const salesLabel = salesCard?.querySelector(".kpi-label");
+      const targetLabel = targetCard?.querySelector(".kpi-label");
+      const trendPanel = document.getElementById("salesTrendChart")?.closest(".panel");
+      const trendSubtitle = trendPanel?.querySelector(".panel-subtitle");
+
+      if (salesLabel) salesLabel.textContent = "Gross sales";
+      if (targetLabel) targetLabel.textContent = "Target achievement";
+      if (trendSubtitle) {
+        trendSubtitle.textContent =
+          "All collection entries encoded within the selected date range";
+      }
+    }
+    function addExecutiveDatePresets() {
+      const presets = document.querySelector(".presets");
+
+      if (!presets || document.getElementById("executiveThisMonth")) return;
+
+      const firstExistingButton = presets.querySelector("button");
+      const buttons = [
+        createDatePresetButton("executiveThisMonth", "This month", "THIS_MONTH"),
+        createDatePresetButton("executiveLastMonth", "Last month", "LAST_MONTH"),
+        createDatePresetButton("executiveThisYear", "This year", "THIS_YEAR"),
+      ];
+
+      buttons.forEach((button) => {
+        presets.insertBefore(button, firstExistingButton);
+      });
+    }
+    function createDatePresetButton(id, label, preset) {
+      const button = document.createElement("button");
+      button.id = id;
+      button.className = "preset";
+      button.type = "button";
+      button.textContent = label;
+      button.addEventListener("click", () => applyExecutiveDatePreset(preset));
+      return button;
+    }
+    function applyExecutiveDatePreset(preset) {
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
+
+      if (!startInput || !endInput || !endInput.max) return;
+
+      const availableMinimum = parseIsoDate(startInput.min || endInput.max);
+      const availableMaximum = parseIsoDate(endInput.max);
+      let selectedStart = new Date(availableMaximum);
+      let selectedEnd = new Date(availableMaximum);
+
+      if (preset === "THIS_MONTH") {
+        selectedStart = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth(),
+          1,
+        );
+        executiveState.trendMode = "DAY";
+      } else if (preset === "LAST_MONTH") {
+        selectedStart = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth() - 1,
+          1,
+        );
+        selectedEnd = new Date(
+          availableMaximum.getFullYear(),
+          availableMaximum.getMonth(),
+          0,
+        );
+        executiveState.trendMode = "DAY";
+      } else {
+        selectedStart = new Date(availableMaximum.getFullYear(), 0, 1);
+        executiveState.trendMode = "MONTH";
+      }
+
+      if (selectedStart < availableMinimum) selectedStart = availableMinimum;
+      if (selectedEnd > availableMaximum) selectedEnd = availableMaximum;
+      if (selectedEnd < availableMinimum) selectedEnd = availableMinimum;
+
+      startInput.value = toIsoDate(selectedStart);
+      endInput.value = toIsoDate(selectedEnd);
+      updateTrendButtonState(executiveState.trendMode);
+      document.getElementById("applyButton")?.click();
+    }
+    function replaceOverviewTrendCard() {
+      const host = document.getElementById("salesTrendChart");
+      const panel = host?.closest(".panel");
+
+      if (
+        !host ||
+        !panel ||
+        document.getElementById("executiveOverviewSalesMomentum")
+      ) {
+        return;
+      }
+
+      const title = panel.querySelector(".panel-title, h2, h3");
+      const subtitle = panel.querySelector(".panel-subtitle");
+      const tag = document.getElementById("trendBucket");
+
+      if (title) title.textContent = "Sales momentum";
+      if (subtitle) {
+        subtitle.textContent =
+          "Encoded sales amount over the selected date range";
+      }
+      if (tag) tag.textContent = "Auto view";
+
+      host.id = "executiveOverviewSalesMomentum";
+      host.classList.add("executive-overview-momentum");
+      host.innerHTML =
+        '<div class="empty-chart">Preparing sales for the selected range…</div>';
+    }
+    function observeDashboardRefreshes() {
+      const salesValue = document.getElementById("kpiSales");
+
+      if (!salesValue || executiveState.observer) return;
+
+      executiveState.observer = new MutationObserver(() => {
+        if (executiveState.renderingSupport) return;
+
+        const filterKey = getExecutiveFilterKey(readExecutiveFilters());
+
+        if (
+          !filterKey ||
+          filterKey === executiveState.loadedFilterKey ||
+          filterKey === executiveState.inFlightFilterKey
+        ) {
+          return;
+        }
+
+        scheduleExecutiveRefresh(80);
+      });
+      executiveState.observer.observe(salesValue, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+
+      document.getElementById("refreshButton")?.addEventListener("click", () => {
+        executiveState.monthlyCache = Object.create(null);
+        executiveState.monthlyLoadingKey = "";
+        executiveState.monthlyRequestVersion += 1;
+        executiveState.loadedFilterKey = "";
+        executiveState.inFlightFilterKey = "";
+      });
+    }
+    function scheduleExecutiveRefresh(delay, urgent) {
+      window.clearTimeout(executiveState.refreshTimer);
+      executiveState.refreshTimer = null;
+
+      if (
+        executiveState.idleHandle !== null &&
+        typeof window.cancelIdleCallback === "function"
+      ) {
+        window.cancelIdleCallback(executiveState.idleHandle);
+      }
+      executiveState.idleHandle = null;
+
+      executiveState.refreshTimer = window.setTimeout(() => {
+        executiveState.refreshTimer = null;
+
+        if (
+          urgent !== true &&
+          typeof window.requestIdleCallback === "function"
+        ) {
+          executiveState.idleHandle = window.requestIdleCallback(
+            () => {
+              executiveState.idleHandle = null;
+              refreshExecutiveSales();
+            },
+            { timeout: 1200 },
+          );
+          return;
+        }
+
+        refreshExecutiveSales();
+      }, Math.max(0, Number(delay) || 0));
+    }
+    function refreshExecutiveSales() {
+      if (!isAppsScriptRuntime()) return;
+
+      const filters = readExecutiveFilters();
+      const filterKey = getExecutiveFilterKey(filters);
+
+      if (!filterKey) return;
+
+      if (
+        filterKey === executiveState.loadedFilterKey &&
+        executiveState.latestSupport
+      ) {
+        renderExecutiveSupport(executiveState.latestSupport);
+        return;
+      }
+
+      if (filterKey === executiveState.inFlightFilterKey) return;
+
+      const requestVersion = executiveState.requestVersion + 1;
+      executiveState.requestVersion = requestVersion;
+      executiveState.supportLoading = true;
+      executiveState.inFlightFilterKey = filterKey;
+
+      google.script.run
+        .withSuccessHandler((supportData) => {
+          if (requestVersion !== executiveState.requestVersion) return;
+
+          executiveState.supportLoading = false;
+          executiveState.inFlightFilterKey = "";
+          executiveState.loadedFilterKey = filterKey;
+          renderExecutiveSupport(supportData);
+        })
+        .withFailureHandler((error) => {
+          if (requestVersion !== executiveState.requestVersion) return;
+
+          executiveState.supportLoading = false;
+          executiveState.inFlightFilterKey = "";
+          console.warn(
+            "Executive sales support could not be loaded:",
+            error?.message || error,
+          );
+        })
+        .getExecutiveSalesSupport(filters);
+    }
+    function getExecutiveFilterKey(filters) {
+      const safeFilters = filters || {};
+
+      if (!safeFilters.startDate || !safeFilters.endDate) return "";
+
+      return [
+        safeFilters.startDate,
+        safeFilters.endDate,
+        safeFilters.region || "ALL",
+        safeFilters.branch || "ALL",
+      ].join("|");
+    }
+    function renderExecutiveSupport(supportData) {
+      if (!supportData) return;
+
+      executiveState.renderingSupport = true;
+      executiveState.latestSupport = supportData;
+      executiveState.loadedFilterKey = getExecutiveFilterKey(
+        supportData.filtersApplied || readExecutiveFilters(),
+      );
+      primeMonthlyCacheFromSupport(supportData);
+      const reconciliation = supportData.reconciliation || {};
+      const kpis = supportData.kpis || {};
+      const branchCount = Number(supportData.branchAchievementCount) || 0;
+      const targetSub = document.getElementById("kpiTargetSub");
+      const salesSub = document.getElementById("kpiSalesSub");
+      const cacheNote = document.getElementById("executiveTrendCacheNote");
+
+      setText(
+        "kpiSales",
+        formatCurrency(reconciliation.encodedCollections ?? kpis.encodedCollections),
+      );
+      setText(
+        "kpiTarget",
+        kpis.targetAchievement == null
+          ? "—"
+          : formatPercentPrecise(kpis.targetAchievement),
+      );
+      setText("executiveNonAmount", formatCurrency(reconciliation.nonSalesReceipts));
+      setText("executiveReprintAmount", formatCurrency(reconciliation.reprints));
+      setText("executiveEncodedAmount", formatCurrency(reconciliation.encodedCollections));
+
+      if (salesSub) {
+        const encodedRows =
+          Number(reconciliation.encodedRows) ||
+          (Number(reconciliation.includedRows) || 0) +
+            (Number(reconciliation.excludedRows) || 0);
+        salesSub.textContent =
+          `${formatNumber(encodedRows)} matched sales rows`;
+      }
+
+      if (targetSub) {
+        targetSub.textContent =
+          `Average of ${formatNumber(branchCount)} branch achievement rows`;
+      }
+
+      if (cacheNote) {
+        cacheNote.textContent =
+          supportData.cacheStatus === "HIT" ||
+          supportData.cacheStatus === "MEMORY"
+            ? "All trend views ready · cached"
+            : "All trend views loaded together";
+      }
+
+      if (
+        executiveState.trendMode === "AUTO" ||
+        !supportData.trends?.[executiveState.trendMode]
+      ) {
+        executiveState.trendMode =
+          supportData.trendMode || inferBestTrendMode();
+      }
+
+      renderOverviewSalesMomentum(supportData);
+      renderSelectedExecutiveTrend();
+
+      if (executiveState.monthlyActive) {
+        const monthlySupport = getCachedSelectedMonthSupport();
+
+        if (monthlySupport) {
+          renderMonthlySales(monthlySupport);
+        } else {
+          showMonthlyLoading("Loading the selected month…");
+          loadSelectedMonthSupport(false);
+        }
+        document.getElementById("overviewView")?.classList.add("hidden");
+        document.getElementById("slotUtilizationView")?.classList.add("hidden");
+        document.getElementById("salesTrendsView")?.classList.add("hidden");
+        document.getElementById("monthlySalesView")?.classList.remove("hidden");
+      } else if (executiveState.trendsActive) {
+        document.getElementById("overviewView")?.classList.add("hidden");
+        document.getElementById("slotUtilizationView")?.classList.add("hidden");
+        document.getElementById("monthlySalesView")?.classList.add("hidden");
+        document.getElementById("salesTrendsView")?.classList.remove("hidden");
+      }
+
+      executiveState.renderingSupport = false;
+    }

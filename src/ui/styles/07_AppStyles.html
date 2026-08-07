@@ -1,0 +1,379 @@
+<style>
+
+  .slot-analytics-title span {
+    color: #e4b84e;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .slot-analytics-title strong {
+    margin-top: 4px;
+    color: white;
+    font-size: clamp(19px, 3vw, 28px);
+  }
+
+  .slot-analytics-title small {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 10px;
+  }
+
+  .slot-analytics-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .slot-analytics-stat {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .slot-analytics-stat span,
+  .slot-analytics-stat small,
+  .slot-analytics-stat strong {
+    display: block;
+  }
+
+  .slot-analytics-stat span {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .slot-analytics-stat strong {
+    margin-top: 7px;
+    overflow: hidden;
+    color: white;
+    font-size: clamp(16px, 2.2vw, 23px);
+    line-height: 1.1;
+    text-overflow: ellipsis;
+  }
+
+  .slot-analytics-stat small {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  .slot-analytics-insight {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 9px 13px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-left-width: 4px;
+    border-radius: 13px;
+    background: #fbfcfd;
+  }
+
+  .slot-analytics-insight.growing {
+    border-left-color: var(--green);
+  }
+
+  .slot-analytics-insight.stable {
+    border-left-color: var(--amber);
+  }
+
+  .slot-analytics-insight.declining {
+    border-left-color: var(--red);
+  }
+
+  .slot-analytics-insight.insufficient {
+    border-left-color: var(--muted);
+  }
+
+  .slot-analytics-insight p {
+    margin: 1px 0 0;
+    color: var(--ink);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .slot-analytics-insight > strong {
+    grid-column: 2;
+    color: #8b6508;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .slot-analytics-history {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+  }
+
+  .slot-analytics-history-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .slot-analytics-history-heading h3 {
+    margin: 0;
+    color: var(--navy);
+    font-size: 14px;
+  }
+
+  .slot-analytics-history-heading span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  .slot-analytics-table-wrap {
+    overflow-x: auto;
+  }
+
+  .slot-analytics-table-wrap table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+  }
+
+  .slot-analytics-table-wrap th,
+  .slot-analytics-table-wrap td {
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 10px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .slot-analytics-table-wrap th {
+    background: #f8fafb;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .slot-analytics-table-wrap th.number,
+  .slot-analytics-table-wrap td.number {
+    text-align: right;
+  }
+
+  .slot-analytics-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .slot-analytics-table-wrap tbody tr:hover td {
+    background: #fbfcfd;
+  }
+
+  .slot-analytics-utilization {
+    display: inline-flex;
+    min-width: 64px;
+    justify-content: center;
+    padding: 4px 7px;
+    border-radius: 999px;
+    font-weight: 850;
+  }
+
+  .slot-analytics-utilization.low,
+  .slot-analytics-utilization.overCapacity {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+
+  .slot-analytics-utilization.moderate {
+    background: var(--amber-soft);
+    color: #8b6508;
+  }
+
+  .slot-analytics-utilization.high {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+
+  .slot-analytics-utilization.noData {
+    background: #eef1f4;
+    color: var(--muted);
+  }
+
+  .slot-analytics-empty {
+    padding: 28px !important;
+    color: var(--muted) !important;
+    text-align: center !important;
+  }
+
+  .slot-analytics-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 16px;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fbfcfd;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.45;
+  }
+
+  @media (max-width: 900px) {
+    .slot-analytics-stat-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .slot-analytics-stat:last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .slot-dialog.slot-analytics-mode {
+      width: calc(100vw - 18px);
+      max-height: calc(100vh - 18px);
+    }
+
+    .slot-analytics-summary {
+      padding: 14px;
+    }
+
+    .slot-analytics-heading,
+    .slot-analytics-history-heading {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .slot-analytics-stat-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .slot-analytics-stat:last-child {
+      grid-column: auto;
+    }
+
+    .slot-analytics-insight {
+      grid-template-columns: 1fr;
+    }
+
+    .slot-analytics-insight > strong {
+      grid-column: auto;
+    }
+  }
+
+
+
+  /* =========================================================
+     SLOT DATA COVERAGE + VALIDATION
+     Adds clarity without changing Overview calculations.
+     ========================================================= */
+
+  .slot-data-quality-panel {
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .slot-data-quality-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px 22px;
+  }
+
+  .slot-data-quality-eyebrow {
+    margin-bottom: 5px;
+    color: #8b6508;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .slot-data-quality-heading p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .slot-data-quality-period {
+    flex: none;
+    padding: 7px 10px;
+    border: 1px solid #ead8aa;
+    border-radius: 999px;
+    background: #fff9eb;
+    color: #765711;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .slot-coverage-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .slot-coverage-card {
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fbfcfd;
+  }
+
+  .slot-coverage-card.usable {
+    border-color: #cfe8dc;
+    background: #f4fbf8;
+  }
+
+  .slot-coverage-card.issue {
+    border-color: #ead8aa;
+    background: #fffaf0;
+  }
+
+  .slot-coverage-card.stale {
+    border-color: #efd7af;
+    background: #fff8ed;
+  }
+
+  .slot-coverage-card > span,
+  .slot-coverage-card > strong,
+  .slot-coverage-card > small {
+    display: block;
+  }
+
+  .slot-coverage-card > span {
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .slot-coverage-card > strong {
+    margin-top: 7px;
+    overflow: hidden;
+    color: var(--navy);
+    font-size: clamp(21px, 2vw, 28px);
+    letter-spacing: -0.035em;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .slot-coverage-card.usable > strong {
+    color: var(--green);
+  }
+</style>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TL Mabuhay Performance Dashboard</title>
+    <?!= include('ui/styles/01_AppStyles'); ?>
+    <?!= include('ui/styles/02_AppStyles'); ?>
+    <?!= include('ui/styles/03_AppStyles'); ?>
+    <?!= include('ui/styles/04_AppStyles'); ?>
+    <?!= include('ui/styles/05_AppStyles'); ?>
+    <?!= include('ui/styles/06_AppStyles'); ?>
+    <?!= include('ui/styles/07_AppStyles'); ?>
+    <?!= include('ui/styles/08_AppStyles'); ?>
+    <?!= include('ui/styles/09_AppStyles'); ?>
+    <?!= include('ui/features/executive/ExecutiveStyles01'); ?>
+    <?!= include('ui/features/executive/ExecutiveStyles02'); ?>
+    <?!= include('ui/features/slot-sharing/SlotSharingStyles'); ?>
+  </head>
+  <body>
+    <div class="app-shell" id="dashboard" aria-busy="true">
+      <?!= include('ui/views/DashboardHeader'); ?>
+      <?!= include('ui/views/OverviewView'); ?>
+      <?!= include('ui/views/SlotUtilizationView'); ?>
+    </div>
+
+    <?!= include('ui/views/DialogsAndLoading'); ?>
+
+    <?!= include('ui/scripts/AppStart'); ?>
+    <?!= include('ui/scripts/AppBootstrap'); ?>
+    <?!= include('ui/scripts/ViewController'); ?>
+    <?!= include('ui/scripts/SlotRequestController'); ?>
+    <?!= include('ui/scripts/SlotViewRenderer'); ?>
+    <?!= include('ui/scripts/SlotLedgerRenderer'); ?>
+    <?!= include('ui/scripts/Charts'); ?>
+    <?!= include('ui/scripts/BranchTable'); ?>
+    <?!= include('ui/scripts/SlotDialogController'); ?>
+    <?!= include('ui/scripts/SlotAnalytics'); ?>
+    <?!= include('ui/scripts/SlotCapacityCards'); ?>
+    <?!= include('ui/scripts/ClientFormatters'); ?>
+    <?!= include('ui/scripts/LocalPreview'); ?>
+    <?!= include('ui/scripts/AppEnd'); ?>
+
+    <?!= include('ui/features/executive/ExecutiveStart'); ?>
+    <?!= include('ui/features/executive/ExecutiveShell'); ?>
+    <?!= include('ui/features/executive/ExecutiveTrendView'); ?>
+    <?!= include('ui/features/executive/ExecutiveTrendChart'); ?>
+    <?!= include('ui/features/executive/MonthlySalesController'); ?>
+    <?!= include('ui/features/executive/MonthlySalesRenderer'); ?>
+    <?!= include('ui/features/executive/ExecutiveFormatters'); ?>
+    <?!= include('ui/features/executive/ExecutiveEnd'); ?>
+
+    <?!= include('ui/features/slot-sharing/SlotSharingScript'); ?>
+  </body>
+</html>

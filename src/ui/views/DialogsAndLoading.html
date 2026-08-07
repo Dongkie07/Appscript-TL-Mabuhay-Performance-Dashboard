@@ -1,0 +1,38 @@
+    <dialog
+      class="slot-dialog"
+      id="branchUtilizationDialog"
+      aria-labelledby="slotDialogTitle"
+    >
+      <div class="slot-dialog-shell">
+        <header class="slot-dialog-header">
+          <div>
+            <div class="eyebrow">Branch capacity</div>
+            <h2 id="slotDialogTitle">Slot utilization</h2>
+            <p id="slotDialogMeta"></p>
+          </div>
+          <button
+            class="dialog-close"
+            id="closeSlotDialogButton"
+            type="button"
+            aria-label="Close slot utilization"
+          >
+            &times;
+          </button>
+        </header>
+        <div class="slot-dialog-body">
+          <p class="slot-dialog-note">
+            These figures come from the connected Sheet. Each course uses its
+            own latest available slot record within the selected dates and
+            compares it with that course’s prior available record.
+          </p>
+          <div class="slot-course-grid" id="slotCourseCards"></div>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="loading-cover" id="loadingCover">
+      <div class="loader-card">
+        <div class="spinner"></div>
+        Loading dashboard data…
+      </div>
+    </div>

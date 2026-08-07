@@ -1,0 +1,345 @@
+<style>
+
+  .slot-ledger-panel {
+    margin-top: 14px;
+    padding: 0 20px 8px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: white;
+    box-shadow: var(--shadow);
+  }
+
+  .slot-ledger-intro {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 18px 0 14px;
+  }
+
+  .slot-utilization-legend {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 13px;
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  .slot-utilization-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .slot-utilization-legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .slot-utilization-legend i.low {
+    background: var(--red);
+  }
+
+  .slot-utilization-legend i.moderate {
+    background: var(--amber);
+  }
+
+  .slot-utilization-legend i.high {
+    background: var(--green);
+  }
+
+  .slot-ledger-head,
+  .slot-ledger-row {
+    display: grid;
+    grid-template-columns:
+      minmax(160px, 1.18fr) minmax(150px, 0.95fr) 96px
+      minmax(210px, 1.38fr) 98px minmax(210px, 1.22fr);
+    align-items: center;
+    gap: 13px;
+  }
+
+  .slot-ledger-head {
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid #cbd4df;
+    color: var(--muted);
+    font-size: 8px;
+    font-weight: 850;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .slot-ledger-head .number {
+    text-align: right;
+  }
+
+  .slot-ledger-row {
+    width: 100%;
+    padding: 13px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+    transition:
+      background 0.14s ease,
+      transform 0.14s ease;
+  }
+
+  .slot-ledger-row:hover {
+    margin-inline: -10px;
+    width: calc(100% + 20px);
+    padding-inline: 10px;
+    border-radius: 10px;
+    background: #f5f8f9;
+  }
+
+  .slot-ledger-branch,
+  .slot-record-cell,
+  .slot-allocation-cell,
+  .slot-meter-cell,
+  .slot-utilization-cell,
+  .slot-ledger-trend {
+    min-width: 0;
+  }
+
+  .slot-ledger-branch {
+    position: relative;
+    padding-right: 20px;
+  }
+
+  .slot-ledger-branch strong,
+  .slot-record-cell strong,
+  .slot-allocation-cell strong,
+  .slot-utilization-cell strong {
+    display: block;
+  }
+
+  .slot-ledger-branch strong {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .slot-ledger-branch small,
+  .slot-record-cell small,
+  .slot-allocation-cell small,
+  .slot-meter-cell small,
+  .slot-utilization-cell small,
+  .slot-ledger-trend small,
+  .slot-ledger-trend em {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 8.5px;
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  .slot-ledger-branch i {
+    position: absolute;
+    top: 50%;
+    right: 3px;
+    color: var(--teal);
+    font-size: 19px;
+    font-style: normal;
+    transform: translateY(-50%);
+  }
+
+  .slot-record-cell strong {
+    color: var(--navy);
+    font-size: 10px;
+  }
+
+  .slot-allocation-cell,
+  .slot-utilization-cell {
+    text-align: right;
+  }
+
+  .slot-allocation-cell strong {
+    color: var(--navy);
+    font-size: 16px;
+  }
+
+  .slot-segment-meter {
+    display: grid;
+    grid-template-columns: repeat(20, minmax(2px, 1fr));
+    gap: 2px;
+    height: 17px;
+  }
+
+  .slot-segment-meter i {
+    border-radius: 2px;
+    background: #dfe5eb;
+  }
+
+  .slot-segment-meter.low i.active {
+    background: var(--red);
+  }
+
+  .slot-segment-meter.moderate i.active {
+    background: var(--amber);
+  }
+
+  .slot-segment-meter.high i.active {
+    background: var(--teal);
+  }
+
+  .slot-utilization-cell strong {
+    font-size: 17px;
+  }
+
+  .slot-utilization-cell strong.low {
+    color: var(--red);
+  }
+
+  .slot-utilization-cell strong.moderate {
+    color: var(--amber);
+  }
+
+  .slot-utilization-cell strong.high {
+    color: var(--green);
+  }
+
+  .slot-utilization-cell strong.noData {
+    color: var(--muted);
+  }
+
+  .slot-ledger-trend .slot-trend-badge {
+    width: fit-content;
+  }
+
+  .slot-ledger-trend em {
+    color: var(--teal);
+    font-weight: 750;
+  }
+
+  .slot-ledger-empty {
+    padding: 34px 12px;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .loading-cover {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    background: rgba(242, 245, 247, 0.72);
+    backdrop-filter: blur(4px);
+  }
+
+  .loader-card {
+    min-width: 220px;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 15px;
+    background: white;
+    box-shadow: var(--shadow);
+    color: var(--navy);
+    font-size: 13px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    margin: 0 auto 12px;
+    border: 3px solid #e3e8ec;
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .footer-note {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (max-width: 1500px) {
+    .slot-summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .kpi-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .chart-grid.secondary {
+      grid-template-columns: 1fr 1fr;
+    }
+    .chart-grid.secondary .panel:first-child {
+      grid-column: 1 / -1;
+    }
+    .filter-card {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .filter-action-field {
+      min-width: 0;
+    }
+    .filter-action {
+      width: 100%;
+    }
+    .slot-summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .slot-dashboard-toolbar {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .slot-course-tabs {
+      align-self: end;
+    }
+    .slot-toolbar-count {
+      align-self: end;
+      padding-bottom: 11px;
+      text-align: right;
+    }
+    .slot-ledger-head {
+      display: none;
+    }
+    .slot-ledger-row {
+      grid-template-columns:
+        minmax(170px, 1.2fr) minmax(150px, 1fr) 90px;
+      gap: 10px 13px;
+      padding-block: 15px;
+    }
+    .slot-meter-cell {
+      grid-column: 1 / 3;
+    }
+    .slot-utilization-cell {
+      grid-column: 3;
+      grid-row: 2;
+    }
+    .slot-ledger-trend {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto minmax(170px, 0.7fr) 1fr;
+      align-items: center;
+      gap: 8px 12px;
+      padding-top: 4px;
+    }
+    .slot-ledger-trend small,
+    .slot-ledger-trend em {
+      margin-top: 0;
+    }
+  }
+</style>

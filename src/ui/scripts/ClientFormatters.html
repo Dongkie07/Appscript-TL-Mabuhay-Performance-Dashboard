@@ -1,0 +1,82 @@
+    function formatExactCurrency(value) {
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(Number(value) || 0);
+    }
+    function formatCurrency(value) {
+      const number = Number(value) || 0;
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        maximumFractionDigits: 0,
+      }).format(number);
+    }
+    function formatCompactCurrency(value) {
+      const number = Number(value) || 0;
+      return (
+        "₱" +
+        new Intl.NumberFormat("en", {
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(number)
+      );
+    }
+    function formatCount(value) {
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    }
+    function formatPercent(value) {
+      return `${(Number(value) || 0).toFixed(1)}%`;
+    }
+    function formatFriendlyDate(value) {
+      const date = parseIsoDate(value);
+      return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+    }
+    function parseIsoDate(value) {
+      const [year, month, day] = String(value).split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+    function toIsoDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    function calculateNiceMaximum(value) {
+      const exponent = Math.floor(Math.log10(value));
+      const fraction = value / Math.pow(10, exponent);
+      const niceFraction = calculateNiceFraction(fraction);
+
+      return niceFraction * Math.pow(10, exponent);
+    }
+    function calculateNiceFraction(fraction) {
+      if (fraction <= 1) {
+        return 1;
+      }
+
+      if (fraction <= 2) {
+        return 2;
+      }
+
+      if (fraction <= 5) {
+        return 5;
+      }
+
+      return 10;
+    }
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }

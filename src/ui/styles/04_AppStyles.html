@@ -1,0 +1,376 @@
+<style>
+
+  .slot-trend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 15px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: white;
+  }
+
+  .slot-trend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 850;
+  }
+
+  .slot-trend-badge.growing {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+
+  .slot-trend-badge.stable {
+    background: var(--amber-soft);
+    color: #8b6508;
+  }
+
+  .slot-trend-badge.declining {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+
+  .slot-trend-badge.insufficient {
+    background: #eef1f4;
+    color: var(--muted);
+  }
+
+  .slot-trend-comparison {
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .slot-progress-track {
+    height: 10px;
+    margin-top: 14px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e9edf1;
+  }
+
+  .slot-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--teal), var(--teal-bright));
+    transition: width 0.28s ease;
+  }
+
+  .slot-progress-fill.over-capacity {
+    background: linear-gradient(90deg, var(--amber), #f4b942);
+  }
+
+  .slot-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 12px;
+  }
+
+  .slot-stat {
+    min-width: 0;
+    padding: 10px 8px;
+    border-radius: 10px;
+    background: white;
+    text-align: center;
+  }
+
+  .slot-stat strong {
+    display: block;
+    overflow: hidden;
+    color: var(--navy);
+    font-size: 16px;
+    text-overflow: ellipsis;
+  }
+
+  .slot-stat span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .slot-no-data {
+    min-height: 120px;
+    display: grid;
+    place-items: center;
+    margin-top: 16px;
+    padding: 18px;
+    border: 1px dashed #ccd5df;
+    border-radius: 11px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .dashboard-view-tabs {
+    display: inline-flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 6px 18px rgba(20, 35, 59, 0.05);
+  }
+
+  .dashboard-view-tab {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    transition:
+      background 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  .dashboard-view-tab.active {
+    background: var(--navy);
+    box-shadow: 0 5px 12px rgba(20, 35, 59, 0.2);
+    color: white;
+  }
+
+  .dashboard-view-tab:focus-visible,
+  .slot-course-tab:focus-visible,
+  .slot-ledger-row:focus-visible {
+    outline: 3px solid rgba(19, 168, 158, 0.25);
+    outline-offset: 2px;
+  }
+
+  .slot-dashboard-hero {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(20px, 3vw, 32px);
+    border-radius: 18px;
+    background:
+      radial-gradient(
+        circle at 93% 5%,
+        rgba(19, 168, 158, 0.34),
+        transparent 23rem
+      ),
+      linear-gradient(135deg, #14233b, #193554);
+    box-shadow: 0 18px 38px rgba(20, 35, 59, 0.18);
+    color: white;
+  }
+
+  .slot-hero-heading {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .slot-hero-eyebrow {
+    margin-bottom: 6px;
+    color: #78ddd5;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .slot-hero-heading h2 {
+    margin: 0;
+    font-size: clamp(25px, 3vw, 36px);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+  }
+
+  .slot-hero-heading p {
+    max-width: 830px;
+    margin: 8px 0 0;
+    color: #c4d0df;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .slot-range-pill {
+    flex: none;
+    padding: 8px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #dce6ef;
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .slot-summary-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .slot-summary-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.075);
+  }
+
+  .slot-summary-card.primary {
+    border-color: rgba(120, 221, 213, 0.34);
+    background: rgba(19, 168, 158, 0.2);
+  }
+
+  .slot-summary-card > span {
+    display: block;
+    color: #aebdce;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .slot-summary-card strong {
+    display: block;
+    overflow: visible;
+    margin-top: 7px;
+    color: white;
+    font-size: clamp(21px, 2.2vw, 29px);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  #slotUsedOfAllocated,
+  #slotComparableBranches {
+    font-size: clamp(19px, 1.72vw, 27px);
+    letter-spacing: -0.045em;
+  }
+
+  .slot-summary-card small {
+    display: block;
+    margin-top: 7px;
+    color: #9fb0c3;
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  .slot-system-progress {
+    position: relative;
+    z-index: 1;
+    height: 13px;
+    margin-top: 18px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .slot-system-progress span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #13a89e, #5bd5cc);
+    transition: width 0.3s ease;
+  }
+
+  .slot-hero-foot {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 8px;
+    color: #b5c3d2;
+    font-size: 10px;
+  }
+
+  .slot-dashboard-toolbar {
+    display: grid;
+    grid-template-columns:
+      auto minmax(180px, 0.75fr) minmax(190px, 0.85fr)
+      minmax(220px, 1fr) auto;
+    align-items: end;
+    gap: 11px;
+    margin-top: 14px;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+    box-shadow: var(--shadow);
+  }
+
+  .slot-course-tabs {
+    display: flex;
+    gap: 5px;
+  }
+
+  .slot-course-tab {
+    min-width: 66px;
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #f8fafb;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 850;
+    letter-spacing: 0.1em;
+  }
+
+  .slot-course-tab.active {
+    border-color: var(--teal);
+    background: var(--teal);
+    color: white;
+  }
+
+  .slot-toolbar-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .slot-toolbar-field > span {
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .slot-toolbar-field select,
+  .slot-toolbar-field input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fbfcfd;
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .slot-toolbar-count {
+    align-self: center;
+    color: var(--muted);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+</style>

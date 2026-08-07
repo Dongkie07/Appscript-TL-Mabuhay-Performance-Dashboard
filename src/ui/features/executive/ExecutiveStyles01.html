@@ -1,0 +1,304 @@
+<style>
+  .executive-trend-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid #e6dcc8;
+    border-radius: 12px;
+    background: #fbf7ee;
+  }
+
+  .executive-trend-button {
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #536070;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 7px 10px;
+    text-transform: uppercase;
+  }
+
+  .executive-trend-button:hover {
+    background: #f2ead9;
+  }
+
+  .executive-trend-button.active {
+    background: #0b1f3a;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(11, 31, 58, 0.18);
+  }
+
+  .executive-reconciliation {
+    display: grid;
+    grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(145px, 1fr));
+    gap: 10px;
+    margin: 12px 0 0;
+  }
+
+  .executive-reconciliation-card {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid #e8dfd0;
+    border-radius: 14px;
+    display: flex;
+    justify-content: space-between;
+    min-height: 54px;
+    padding: 11px 14px;
+  }
+
+  .executive-reconciliation-card.rule {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .executive-reconciliation-card span {
+    color: #6e7785;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .executive-reconciliation-card strong {
+    color: #0b1f3a;
+    font-size: 14px;
+  }
+
+  .executive-reconciliation-card.rule strong {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .executive-reconciliation-card.excluded strong {
+    color: #9a5a00;
+  }
+
+  .executive-chart-tooltip {
+    background: #0b1f3a;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(11, 31, 58, 0.2);
+    color: #ffffff;
+    display: none;
+    min-width: 150px;
+    padding: 10px 12px;
+    pointer-events: none;
+    position: fixed;
+    z-index: 9999;
+  }
+
+  .executive-chart-tooltip.visible {
+    display: grid;
+    gap: 3px;
+  }
+
+  .executive-chart-tooltip span {
+    color: #dbe3ed;
+    font-size: 11px;
+  }
+
+  .executive-monthly-view {
+    display: grid;
+    gap: 16px;
+  }
+
+  .executive-monthly-hero {
+    align-items: end;
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    padding: 18px 20px;
+  }
+
+  .executive-monthly-hero h2 {
+    color: #0b1f3a;
+    font-size: 20px;
+    margin: 0 0 5px;
+  }
+
+  .executive-monthly-hero p {
+    color: #6e7785;
+    font-size: 12px;
+    margin: 0;
+  }
+
+  .executive-month-field {
+    display: grid;
+    gap: 6px;
+    min-width: 190px;
+  }
+
+  .executive-month-field span {
+    color: #536070;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .executive-month-field input {
+    border: 1px solid #ded4c1;
+    border-radius: 10px;
+    color: #0b1f3a;
+    font: inherit;
+    font-weight: 700;
+    padding: 10px 12px;
+  }
+
+  .executive-monthly-kpis {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .executive-monthly-kpi {
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
+    display: grid;
+    gap: 7px;
+    padding: 15px 17px;
+  }
+
+  .executive-monthly-kpi span {
+    color: #6e7785;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .executive-monthly-kpi strong {
+    color: #0b1f3a;
+    font-size: 22px;
+  }
+
+  .executive-monthly-regions {
+    display: grid;
+    gap: 10px;
+  }
+
+  .executive-region-card {
+    background: #ffffff;
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .executive-region-card summary {
+    align-items: center;
+    cursor: pointer;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(160px, 1.4fr) repeat(3, minmax(110px, 1fr));
+    list-style: none;
+    padding: 14px 16px;
+  }
+
+  .executive-region-card summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .executive-region-card summary:hover {
+    background: #fbf7ee;
+  }
+
+  .executive-region-card summary span,
+  .executive-region-card summary strong {
+    min-width: 0;
+  }
+
+  .executive-region-card summary strong {
+    color: #0b1f3a;
+  }
+
+  .executive-region-card summary span {
+    color: #536070;
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .executive-region-card table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .executive-region-card th,
+  .executive-region-card td {
+    border-top: 1px solid #eee7db;
+    font-size: 12px;
+    padding: 10px 16px;
+    text-align: left;
+  }
+
+  .executive-region-card th:not(:first-child),
+  .executive-region-card td:not(:first-child) {
+    text-align: right;
+  }
+
+  .executive-region-card th {
+    background: #faf8f3;
+    color: #6e7785;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 900px) {
+    .executive-reconciliation {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-monthly-kpis {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-region-card summary {
+      grid-template-columns: minmax(150px, 1.4fr) repeat(2, 1fr);
+    }
+
+    .executive-region-card summary span:nth-of-type(3) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .executive-reconciliation {
+      grid-template-columns: 1fr;
+    }
+
+    .executive-monthly-hero {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .executive-monthly-kpis {
+      grid-template-columns: 1fr;
+    }
+
+    .executive-region-card summary {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .executive-region-card summary span:nth-of-type(n+2) {
+      display: none;
+    }
+
+    .executive-trend-controls {
+      width: 100%;
+    }
+
+    .executive-trend-button {
+      flex: 1;
+      padding-inline: 7px;
+    }
+  }
+
+
+</style>

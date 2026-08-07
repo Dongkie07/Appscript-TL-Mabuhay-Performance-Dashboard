@@ -1,0 +1,376 @@
+<style>
+
+  @media (max-width: 840px) {
+    .topbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .top-actions {
+      justify-content: flex-start;
+    }
+    h1 {
+      white-space: normal;
+    }
+    .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .chart-grid,
+    .chart-grid.secondary {
+      grid-template-columns: 1fr;
+    }
+    .chart-grid.secondary .panel:first-child {
+      grid-column: auto;
+    }
+    .capacity-strip {
+      grid-template-columns: 1fr 1fr;
+    }
+    .context-card {
+      grid-column: 1 / -1;
+    }
+    .slot-hero-heading {
+      flex-direction: column;
+    }
+    .slot-range-pill {
+      white-space: normal;
+    }
+    .slot-summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .slot-ledger-intro {
+      flex-direction: column;
+    }
+    .slot-utilization-legend {
+      justify-content: flex-start;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .app-shell {
+      padding-inline: 11px;
+    }
+    .filter-card {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+    .field {
+      grid-template-rows: auto 50px auto;
+      gap: 7px;
+    }
+    .field-label-spacer {
+      display: none;
+    }
+    .field-help {
+      min-height: 0;
+      font-size: 11px;
+    }
+    .filter-action-field {
+      min-width: 0;
+    }
+    .presets {
+      align-items: flex-start;
+    }
+    .date-caption {
+      width: 100%;
+      margin: 3px 0 0;
+    }
+    .kpi-grid,
+    .capacity-strip {
+      grid-template-columns: 1fr;
+    }
+    .context-card {
+      grid-column: auto;
+    }
+    .dashboard-view-tabs {
+      display: flex;
+      width: 100%;
+    }
+    .dashboard-view-tab {
+      flex: 1;
+      padding-inline: 9px;
+    }
+    .slot-dashboard-hero {
+      padding: 19px 15px;
+      border-radius: 15px;
+    }
+    .slot-summary-grid,
+    .slot-dashboard-toolbar {
+      grid-template-columns: 1fr;
+    }
+    .slot-toolbar-count {
+      padding-bottom: 0;
+      text-align: left;
+    }
+    .slot-ledger-panel {
+      padding-inline: 13px;
+    }
+    .slot-ledger-row {
+      grid-template-columns: 1fr;
+    }
+    .slot-meter-cell,
+    .slot-utilization-cell,
+    .slot-ledger-trend {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    .slot-allocation-cell,
+    .slot-utilization-cell {
+      text-align: left;
+    }
+    .slot-ledger-trend {
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .donut-layout {
+      grid-template-columns: 1fr;
+    }
+    .donut {
+      width: 150px;
+    }
+    .table-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .table-search {
+      width: 100%;
+    }
+    .slot-dialog {
+      width: calc(100vw - 18px);
+      max-height: calc(100vh - 18px);
+      border-radius: 16px;
+    }
+    .slot-dialog-header {
+      padding: 18px;
+    }
+    .slot-dialog-body {
+      padding: 16px 18px 20px;
+    }
+    .slot-course-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+
+  /* =========================================================
+     TL MABUHAY NAVY + GOLD THEME
+     ========================================================= */
+  :root {
+    --ink: #1c2738;
+    --muted: #687386;
+    --soft: #929aa8;
+    --canvas: #f5f2ea;
+    --surface: #ffffff;
+    --line: #e5ddcf;
+    --navy: #0b1f3a;
+    --teal: #c79224;
+    --teal-bright: #e4b84e;
+    --cyan-soft: #f8edd1;
+    --amber: #d99a14;
+    --amber-soft: #fff1d6;
+    --red: #c2414c;
+    --red-soft: #fde8ea;
+    --green: #16835b;
+    --green-soft: #e3f5ed;
+    --shadow: 0 12px 28px rgba(11, 31, 58, 0.10);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 92% 0%, rgba(228, 184, 78, 0.16), transparent 28rem),
+      var(--canvas);
+  }
+
+  .topbar {
+    padding: 17px 19px;
+    border: 1px solid rgba(228, 184, 78, 0.28);
+    border-radius: 18px;
+    background: linear-gradient(135deg, #0b1f3a 0%, #173e67 100%);
+    box-shadow: 0 14px 30px rgba(11, 31, 58, 0.18);
+  }
+  .topbar h1 { color: #ffffff; }
+  .topbar .eyebrow { color: #e4b84e; }
+  .mark {
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    background: linear-gradient(145deg, #f1cc70, #c79224);
+    box-shadow: 0 9px 20px rgba(0, 0, 0, 0.22);
+    color: #0b1f3a;
+  }
+  .status-pill {
+    border-color: rgba(228, 184, 78, 0.44);
+    background: rgba(255, 255, 255, 0.10);
+    color: #f6d781;
+  }
+  .status-dot {
+    background: #e4b84e;
+    box-shadow: 0 0 0 4px rgba(228, 184, 78, 0.20);
+  }
+  .topbar .button {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: #ffffff;
+    color: #0b1f3a;
+  }
+  .topbar .button:hover { border-color: #e4b84e; background: #fffaf0; }
+  .button.primary { border-color: #c79224; background: #c79224; color: #0b1f3a; }
+  .button.primary:hover { border-color: #e4b84e; background: #e4b84e; }
+  .panel-tag { background: #f4e8c7; color: #765711; }
+  .kpi.sales { --accent: #c79224; --accent-soft: #f8edd1; }
+  .kpi.target { --accent: #0b1f3a; --accent-soft: #e7ecf2; }
+  .kpi.transactions { --accent: #2c5d8a; --accent-soft: #e7eef6; }
+  .capacity-ring {
+    background: conic-gradient(#c79224 calc(var(--pct) * 1%), #ece6da 0);
+  }
+  .bar-fill, .slot-progress-fill {
+    background: linear-gradient(90deg, #0b1f3a, #c79224);
+  }
+  .slot-dashboard-hero {
+    background:
+      radial-gradient(circle at 93% 5%, rgba(228, 184, 78, 0.30), transparent 23rem),
+      linear-gradient(135deg, #0b1f3a, #173e67);
+  }
+  .slot-hero-eyebrow { color: #f1cc70; }
+  .slot-summary-card.primary {
+    border-color: rgba(228, 184, 78, 0.40);
+    background: rgba(199, 146, 36, 0.22);
+  }
+  .slot-system-progress span {
+    background: linear-gradient(90deg, #c79224, #f1cc70);
+  }
+
+  /* Exact-value Sales Momentum tooltip */
+  .sales-point {
+    cursor: pointer;
+    transition: r 0.12s ease, stroke-width 0.12s ease, filter 0.12s ease;
+  }
+  .sales-point:hover, .sales-point:focus {
+    r: 7px;
+    stroke-width: 4;
+    filter: drop-shadow(0 3px 5px rgba(11, 31, 58, 0.22));
+    outline: none;
+  }
+  .sales-trend-tooltip {
+    min-width: 150px;
+    padding: 10px 13px;
+    border: 1px solid rgba(228, 184, 78, 0.42);
+    background: #0b1f3a;
+    box-shadow: 0 12px 28px rgba(11, 31, 58, 0.30);
+  }
+  .sales-trend-tooltip strong { color: #f6d781; }
+  .sales-trend-tooltip span { font-size: 15px; font-weight: 850; }
+
+  /* Semantic utilization colors and the local legend beside the ledger. */
+  .slot-segment-meter.low i.active { background: #c2414c; }
+  .slot-segment-meter.moderate i.active { background: #d99a14; }
+  .slot-segment-meter.high i.active { background: #16835b; }
+  .slot-segment-meter.overCapacity i.active { background: #b42336; }
+  .slot-utilization-cell strong.low { color: #c2414c; }
+  .slot-utilization-cell strong.moderate { color: #b77908; }
+  .slot-utilization-cell strong.high { color: #16835b; }
+  .slot-utilization-cell strong.overCapacity { color: #b42336; }
+  .slot-utilization-legend i.low { background: #c2414c; }
+  .slot-utilization-legend i.moderate { background: #d99a14; }
+  .slot-utilization-legend i.high { background: #16835b; }
+  .slot-utilization-legend i.overCapacity { background: #b42336; }
+
+  .field-help {
+    min-height: 14px;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  /* Delay rendering of large off-screen sections where supported. */
+  .deferred-render {
+    content-visibility: auto;
+    contain-intrinsic-size: 500px;
+  }
+
+  .slot-inline-loader {
+    min-height: 170px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .slot-inline-loader::before {
+    width: 24px;
+    height: 24px;
+    margin: 0 auto 10px;
+    border: 3px solid #e3e8ec;
+    border-top-color: #c79224;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    content: "";
+  }
+
+  /* Mobile-native select reliability and larger accessible touch targets. */
+  @media (max-width: 560px) {
+    .filter-card {
+      overflow: visible;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .field select,
+    .field input,
+    .filter-action {
+      width: 100%;
+      height: 50px;
+      min-height: 50px;
+      font-size: 16px;
+      touch-action: manipulation;
+    }
+    .field select {
+      position: relative;
+      z-index: 3;
+      width: 100%;
+      pointer-events: auto;
+      -webkit-appearance: menulist;
+      appearance: auto;
+    }
+    .branch-filter-field { position: relative; z-index: 4; }
+    .loading-cover { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  }
+
+  /* Detailed analytics shown only when a branch is opened from TDC/PDC. */
+  .slot-dialog.slot-analytics-mode {
+    width: min(1180px, calc(100vw - 28px));
+    max-height: min(860px, calc(100vh - 28px));
+  }
+
+  .slot-course-grid.analytics-mode {
+    display: block;
+  }
+
+  .slot-analytics-panel {
+    display: grid;
+    gap: 16px;
+  }
+
+  .slot-analytics-summary {
+    padding: 18px;
+    border: 1px solid rgba(199, 146, 36, 0.32);
+    border-radius: 16px;
+    background:
+      linear-gradient(
+        135deg,
+        rgba(11, 31, 58, 0.98),
+        rgba(25, 65, 103, 0.93)
+      );
+    color: white;
+  }
+
+  .slot-analytics-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 15px;
+  }
+
+  .slot-analytics-title span,
+  .slot-analytics-title small,
+  .slot-analytics-title strong {
+    display: block;
+  }
+</style>

@@ -1,0 +1,118 @@
+    function openBranchUtilizationDialog(branch, branchButton) {
+      const dialog = getElementById("branchUtilizationDialog");
+      const cards = getElementById("slotCourseCards");
+
+      dashboardState.lastFocusedBranchButton = branchButton;
+      dialog.classList.remove("slot-analytics-mode");
+      cards.classList.remove("analytics-mode");
+      renderBranchUtilizationDialog(branch);
+
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      resetSlotDialogViewport(dialog);
+    }
+    function resetSlotDialogViewport(dialog) {
+      const shell = dialog.querySelector(".slot-dialog-shell");
+      const tableWraps = dialog.querySelectorAll(
+        ".slot-analytics-table-wrap",
+      );
+
+      const resetPosition = () => {
+        if (shell) {
+          shell.scrollTop = 0;
+          shell.scrollLeft = 0;
+        }
+
+        tableWraps.forEach((tableWrap) => {
+          tableWrap.scrollLeft = 0;
+        });
+      };
+
+      resetPosition();
+      window.requestAnimationFrame(resetPosition);
+    }
+    function renderBranchUtilizationDialog(branch) {
+      const note = document.querySelector(
+        "#branchUtilizationDialog .slot-dialog-note",
+      );
+
+      getElementById("slotDialogTitle").textContent =
+        `${branch.branchName} slot utilization`;
+      getElementById("slotDialogMeta").textContent = [
+        branch.region,
+        `${formatFriendlyDate(
+          dashboardState.data.filtersApplied.startDate,
+        )} – ${formatFriendlyDate(
+          dashboardState.data.filtersApplied.endDate,
+        )}`,
+      ].join(" • ");
+
+      if (note) {
+        note.textContent =
+          "These figures come from the connected Sheet. Each course uses its own latest available slot record within the selected dates and compares it with that course’s prior available record.";
+      }
+
+      getElementById("slotCourseCards").replaceChildren(
+        createCourseUtilizationCard(branch, "TDC"),
+        createCourseUtilizationCard(branch, "PDC"),
+      );
+    }
+    function openSlotAnalyticsDialog(branch, branchButton) {
+      const dialog = getElementById("branchUtilizationDialog");
+      const cards = getElementById("slotCourseCards");
+
+      dashboardState.lastFocusedBranchButton = branchButton;
+      dialog.classList.add("slot-analytics-mode");
+      cards.classList.add("analytics-mode");
+      renderSlotAnalyticsDialog(branch);
+
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      resetSlotDialogViewport(dialog);
+    }
+    function renderSlotAnalyticsDialog(branch) {
+      const courseCode = dashboardState.slotCourse.toUpperCase();
+      const note = document.querySelector(
+        "#branchUtilizationDialog .slot-dialog-note",
+      );
+
+      getElementById("slotDialogTitle").textContent =
+        `${branch.branchName} · ${courseCode} analytics`;
+      getElementById("slotDialogMeta").textContent = [
+        branch.region,
+        `${formatFriendlyDate(
+          dashboardState.data.filtersApplied.startDate,
+        )} – ${formatFriendlyDate(
+          dashboardState.data.filtersApplied.endDate,
+        )}`,
+      ].join(" • ");
+
+      if (note) {
+        note.textContent =
+          `Detailed ${courseCode} weekly allocation, used slots, utilization, and encoded sales for the selected period. This detailed view is available only from the TDC/PDC tab.`;
+      }
+
+      getElementById("slotCourseCards").replaceChildren(
+        createSlotAnalyticsPanel(branch, courseCode),
+      );
+    }
+    function closeBranchUtilizationDialog() {
+      const dialog = getElementById("branchUtilizationDialog");
+
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+    function restoreBranchButtonFocus() {
+      const branchButton = dashboardState.lastFocusedBranchButton;
+
+      dashboardState.lastFocusedBranchButton = null;
+
+      if (branchButton && document.body.contains(branchButton)) {
+        branchButton.focus();
+      }
+    }

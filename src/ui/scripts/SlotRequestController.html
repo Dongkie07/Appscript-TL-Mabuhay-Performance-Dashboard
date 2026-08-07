@@ -1,0 +1,326 @@
+    function invalidateSlotData() {
+      cancelSlotDataPrefetch();
+      dashboardState.slotData = null;
+      dashboardState.slotLoading = false;
+      dashboardState.slotRequestKey = "";
+    }
+    function cancelSlotDataPrefetch() {
+      if (dashboardState.slotPrefetchTimer == null) {
+        return;
+      }
+
+      window.clearTimeout(dashboardState.slotPrefetchTimer);
+      dashboardState.slotPrefetchTimer = null;
+    }
+    function handleSlotCourseClick(event) {
+      dashboardState.slotCourse =
+        event.currentTarget.dataset.slotCourse;
+
+      document.querySelectorAll("[data-slot-course]").forEach(
+        (courseButton) => {
+          const isActive =
+            courseButton.dataset.slotCourse ===
+            dashboardState.slotCourse;
+
+          courseButton.classList.toggle("active", isActive);
+          courseButton.setAttribute(
+            "aria-selected",
+            isActive ? "true" : "false",
+          );
+        },
+      );
+
+      renderSlotUtilizationView();
+    }
+    function handleSlotLedgerClick(event) {
+      const branchButton = event.target.closest(
+        "[data-slot-branch-key]",
+      );
+
+      if (!branchButton || !dashboardState.slotData) {
+        return;
+      }
+
+      const selectedBranch = findSlotBranchByKey(
+        branchButton.dataset.slotBranchKey,
+      );
+
+      if (selectedBranch) {
+        openSlotAnalyticsDialog(
+          selectedBranch,
+          branchButton,
+        );
+      }
+    }
+    function findSlotBranchByKey(branchKey) {
+      const courseData = getSelectedCapacityCourse();
+
+      if (!courseData) {
+        return null;
+      }
+
+      return courseData.branches.find(
+        (branch) => branch.branchKey === branchKey,
+      ) || null;
+    }
+    function handleBranchTableClick(event) {
+      const branchButton = event.target.closest("[data-branch-key]");
+
+      if (!branchButton || !dashboardState.data) {
+        return;
+      }
+
+      const selectedBranch = findBranchByKey(branchButton.dataset.branchKey);
+
+      if (!selectedBranch) {
+        return;
+      }
+
+      openBranchUtilizationDialog(selectedBranch, branchButton);
+    }
+    function findBranchByKey(branchKey) {
+      return dashboardState.data.branches.find(
+        (branch) => branch.branchKey === branchKey,
+      );
+    }
+    function handleSlotDialogBackdropClick(event) {
+      if (event.target === event.currentTarget) {
+        closeBranchUtilizationDialog();
+      }
+    }
+    function getFilterRequestKey(filters) {
+      return [
+        filters.startDate || "",
+        filters.endDate || "",
+        filters.region || "ALL",
+        filters.branch || "ALL",
+      ].join("|");
+    }
+    function getAppliedSlotFilters() {
+      const applied = dashboardState.data
+        ? dashboardState.data.filtersApplied
+        : null;
+
+      return applied
+        ? {
+            startDate: applied.startDate,
+            endDate: applied.endDate,
+            region: applied.region || "ALL",
+            branch: applied.branch || "ALL",
+          }
+        : readSelectedFilters();
+    }
+    function shouldPrefetchSlotData() {
+      if (
+        !isAppsScriptRuntime() ||
+        dashboardState.localPreview ||
+        dashboardState.loading ||
+        dashboardState.slotData ||
+        dashboardState.slotLoading ||
+        dashboardState.activeView !== "overviewView"
+      ) {
+        return false;
+      }
+
+      const connection =
+        navigator.connection ||
+        navigator.mozConnection ||
+        navigator.webkitConnection;
+
+      if (!connection) {
+        return true;
+      }
+
+      if (connection.saveData) {
+        return false;
+      }
+
+      return !/2g/i.test(connection.effectiveType || "");
+    }
+    function scheduleSlotDataPrefetch() {
+      cancelSlotDataPrefetch();
+
+      if (!shouldPrefetchSlotData()) {
+        return;
+      }
+
+      dashboardState.slotPrefetchTimer = window.setTimeout(() => {
+        dashboardState.slotPrefetchTimer = null;
+
+        if (!shouldPrefetchSlotData()) {
+          return;
+        }
+
+        ensureSlotUtilizationData({
+          filters: getAppliedSlotFilters(),
+          silent: true,
+        });
+      }, 900);
+    }
+    function ensureSlotUtilizationData(options) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const requestOptions = options || {};
+      const filters = requestOptions.filters || readSelectedFilters();
+      const silent = requestOptions.silent === true;
+      const requestKey = getFilterRequestKey(filters);
+
+      if (
+        dashboardState.slotData &&
+        dashboardState.slotRequestKey === requestKey
+      ) {
+        if (!silent || dashboardState.activeView === "slotUtilizationView") {
+          renderSlotUtilizationView();
+        }
+        return;
+      }
+
+      if (
+        dashboardState.slotLoading &&
+        dashboardState.slotRequestKey === requestKey
+      ) {
+        if (!silent) {
+          renderSlotLoadingState();
+        }
+        return;
+      }
+
+      dashboardState.slotLoading = true;
+      dashboardState.slotRequestKey = requestKey;
+
+      if (!silent) {
+        renderSlotLoadingState();
+      }
+
+      if (!isAppsScriptRuntime()) {
+        dashboardState.slotData = {
+          filtersApplied: dashboardState.data.filtersApplied,
+          capacity: dashboardState.data.capacity,
+        };
+        dashboardState.slotLoading = false;
+        renderSlotUtilizationView();
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler((slotData) => {
+          if (dashboardState.slotRequestKey !== requestKey) {
+            return;
+          }
+
+          dashboardState.slotData = slotData;
+          dashboardState.slotLoading = false;
+
+          if (dashboardState.activeView === "slotUtilizationView") {
+            renderSlotUtilizationView();
+          }
+        })
+        .withFailureHandler((error) => {
+          if (dashboardState.slotRequestKey !== requestKey) {
+            return;
+          }
+
+          dashboardState.slotLoading = false;
+
+          if (!silent || dashboardState.activeView === "slotUtilizationView") {
+            renderSlotLoadingFailure(error);
+          } else {
+            dashboardState.slotRequestKey = "";
+            console.warn(
+              "Background TDC/PDC preload failed: " +
+                (getErrorMessage(error) || "Unknown error"),
+            );
+          }
+        })
+        .getSlotUtilizationData(filters);
+    }
+    function renderSlotLoadingState() {
+      getElementById("slotLatestUtilization").textContent = "…";
+      getElementById("slotUsedOfAllocated").textContent = "…";
+      getElementById("slotIdleSlots").textContent = "…";
+      getElementById("slotPeriodAverage").textContent = "…";
+      getElementById("slotComparableBranches").textContent = "…";
+      getElementById("slotComparableBasis").textContent =
+        "Loading comparison coverage…";
+      setSlotDataQualityPanelState(
+        "…",
+        "Loading branch coverage and validation details…",
+      );
+
+      getElementById("slotLatestBasis").textContent =
+        "Reading cached slot records…";
+
+      getElementById("slotPeriodReports").textContent =
+        "Preparing weekly utilization";
+
+      getElementById("slotHeroFootnote").textContent =
+        "Loading detailed TDC/PDC slot data…";
+
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotBranchCount").textContent = "Loading…";
+
+      getElementById("slotUtilizationRows").innerHTML =
+        '<div class="slot-inline-loader"><div>Loading detailed TDC/PDC records…</div></div>';
+    }
+    function setSlotDataQualityPanelState(value, message) {
+      [
+        "slotOfficialBranches",
+        "slotUsableBranches",
+        "slotNoDataBranches",
+        "slotBehindBranches",
+      ].forEach((elementId) => {
+        getElementById(elementId).textContent = value;
+      });
+
+      getElementById("slotDataQualitySubtitle").textContent = message;
+      getElementById("slotLatestReportingPeriod").textContent =
+        "Latest reporting week: —";
+      getElementById("slotBehindBranchesHelp").textContent =
+        "Latest branch record is older than the newest report";
+      getElementById("slotValidationSummary").textContent = message;
+      getElementById("slotValidationRows").innerHTML =
+        value === "…"
+          ? '<div class="slot-validation-empty">Loading validation details…</div>'
+          : `<div class="slot-validation-empty">${escapeHtml(message)}</div>`;
+    }
+    function renderSlotLoadingFailure(error) {
+      const message =
+        getErrorMessage(error) ||
+        "The detailed slot data could not be loaded.";
+
+      dashboardState.slotLoading = false;
+
+      getElementById("slotLatestUtilization").textContent = "Error";
+      getElementById("slotUsedOfAllocated").textContent = "—";
+      getElementById("slotIdleSlots").textContent = "—";
+      getElementById("slotPeriodAverage").textContent = "—";
+      getElementById("slotComparableBranches").textContent = "—";
+      getElementById("slotComparableBasis").textContent =
+        "Comparison coverage unavailable";
+      setSlotDataQualityPanelState(
+        "—",
+        "Unable to load branch coverage details.",
+      );
+
+      getElementById("slotLatestBasis").textContent =
+        "Unable to load slot records";
+
+      getElementById("slotPeriodReports").textContent =
+        "Check Apps Script executions";
+
+      getElementById("slotHeroFootnote").textContent = message;
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotSystemProgressFill").style.width = "0%";
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        "0",
+      );
+      getElementById("slotBranchCount").textContent = "Unable to load";
+
+      getElementById("slotUtilizationRows").innerHTML =
+        `<div class="slot-ledger-empty">${escapeHtml(message)}</div>`;
+
+      updateErrorBanner(`TDC/PDC data error: ${message}`);
+    }

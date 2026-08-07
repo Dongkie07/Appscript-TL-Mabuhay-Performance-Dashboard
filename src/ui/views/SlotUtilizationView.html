@@ -1,0 +1,242 @@
+      <!-- 2. SLOT UTILIZATION VIEW -->
+      <main
+        class="hidden"
+        id="slotUtilizationView"
+        role="tabpanel"
+        aria-labelledby="slotUtilizationTab"
+      >
+        <section class="slot-dashboard-hero">
+          <div class="slot-hero-heading">
+            <div>
+              <div class="slot-hero-eyebrow">
+                LTMS weekly slot capacity
+              </div>
+              <h2 id="slotCourseTitle">TDC Slot Utilization</h2>
+              <p id="slotSelectionExplanation">
+                Current status uses each branch’s latest available TDC slot
+                record inside the selected date range.
+              </p>
+            </div>
+            <div class="slot-range-pill" id="slotSelectionRange">
+              Selected period
+            </div>
+          </div>
+
+          <div class="slot-summary-grid">
+            <article class="slot-summary-card primary">
+              <span>Current utilization</span>
+              <strong class="mono" id="slotLatestUtilization">—</strong>
+              <small>Latest available snapshot per branch</small>
+            </article>
+            <article class="slot-summary-card">
+              <span>Slots used</span>
+              <strong class="mono" id="slotUsedOfAllocated">—</strong>
+              <small id="slotLatestBasis">Across reporting branches</small>
+            </article>
+            <article class="slot-summary-card">
+              <span>Idle slots</span>
+              <strong class="mono" id="slotIdleSlots">—</strong>
+              <small>Unused in the current snapshot</small>
+            </article>
+            <article class="slot-summary-card">
+              <span>Selected-period average</span>
+              <strong class="mono" id="slotPeriodAverage">—</strong>
+              <small id="slotPeriodReports">Across all weekly records</small>
+            </article>
+            <article class="slot-summary-card">
+              <span>Comparable branches</span>
+              <strong class="mono" id="slotComparableBranches">—</strong>
+              <small id="slotComparableBasis">
+                Have current and prior usable records
+              </small>
+            </article>
+          </div>
+
+          <div
+            class="slot-system-progress"
+            id="slotSystemProgress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span id="slotSystemProgressFill"></span>
+          </div>
+          <div class="slot-hero-foot">
+            <span id="slotHeroFootnote">Waiting for slot data…</span>
+            <span class="mono" id="slotMovementSummary"></span>
+          </div>
+        </section>
+
+        <section
+          class="slot-data-quality-panel"
+          aria-labelledby="slotDataQualityTitle"
+        >
+          <div class="slot-data-quality-heading">
+            <div>
+              <div class="slot-data-quality-eyebrow">
+                Coverage and validation
+              </div>
+              <h2 class="panel-title" id="slotDataQualityTitle">
+                Branch data coverage
+              </h2>
+              <p id="slotDataQualitySubtitle">
+                Waiting for TDC/PDC coverage details…
+              </p>
+            </div>
+            <span class="slot-data-quality-period mono" id="slotLatestReportingPeriod">
+              Latest reporting week: —
+            </span>
+          </div>
+
+          <div class="slot-coverage-grid">
+            <article class="slot-coverage-card">
+              <span>Official branches</span>
+              <strong class="mono" id="slotOfficialBranches">—</strong>
+              <small>Included by the selected filters</small>
+            </article>
+            <article class="slot-coverage-card usable">
+              <span>Usable utilization</span>
+              <strong class="mono" id="slotUsableBranches">—</strong>
+              <small>Valid allocation and used-slot values</small>
+            </article>
+            <article class="slot-coverage-card issue">
+              <span>No usable percentage</span>
+              <strong class="mono" id="slotNoDataBranches">—</strong>
+              <small>Shown as No data, never forced to 0%</small>
+            </article>
+            <article class="slot-coverage-card stale">
+              <span>Behind latest week</span>
+              <strong class="mono" id="slotBehindBranches">—</strong>
+              <small id="slotBehindBranchesHelp">
+                Latest branch record is older than the newest report
+              </small>
+            </article>
+          </div>
+
+          <details class="slot-validation-details" id="slotValidationDetails">
+            <summary>
+              <span id="slotValidationSummary">
+                Loading branches that need source validation…
+              </span>
+              <span aria-hidden="true">⌄</span>
+            </summary>
+            <div class="slot-validation-head" aria-hidden="true">
+              <span>Branch</span>
+              <span>Issue</span>
+              <span>Latest record</span>
+              <span>Recommended action</span>
+            </div>
+            <div
+              class="slot-validation-list"
+              id="slotValidationRows"
+              aria-live="polite"
+            ></div>
+          </details>
+        </section>
+
+        <section
+          class="slot-dashboard-toolbar"
+          aria-label="Slot utilization controls"
+        >
+          <div class="slot-course-tabs" role="tablist">
+            <button
+              class="slot-course-tab active"
+              data-slot-course="tdc"
+              type="button"
+              role="tab"
+              aria-selected="true"
+            >
+              TDC
+            </button>
+            <button
+              class="slot-course-tab"
+              data-slot-course="pdc"
+              type="button"
+              role="tab"
+              aria-selected="false"
+            >
+              PDC
+            </button>
+          </div>
+
+          <label class="slot-toolbar-field">
+            <span>Sort</span>
+            <select id="slotSort">
+              <option value="utilizationAsc">
+                Lowest utilization first
+              </option>
+              <option value="utilizationDesc">
+                Highest utilization first
+              </option>
+              <option value="idleDesc">Most idle slots first</option>
+              <option value="decliningFirst">Declining first</option>
+              <option value="branchName">Branch name</option>
+            </select>
+          </label>
+
+          <label class="slot-toolbar-field">
+            <span>Utilization level</span>
+            <select id="slotLevelFilter">
+              <option value="all">All levels</option>
+              <option value="low">Low — below 35%</option>
+              <option value="moderate">Moderate — 35% to 69.9%</option>
+              <option value="high">Healthy — 70% to 100%</option>
+              <option value="overCapacity">Over allocation — above 100%</option>
+              <option value="noData">No usable percentage</option>
+            </select>
+          </label>
+
+          <label class="slot-toolbar-field search">
+            <span>Find branch</span>
+            <input
+              id="slotBranchSearch"
+              type="search"
+              placeholder="Search branch or region"
+            >
+          </label>
+
+          <div class="slot-toolbar-count mono" id="slotBranchCount">
+            0 branches
+          </div>
+        </section>
+
+        <section class="slot-ledger-panel deferred-render">
+          <div class="slot-ledger-intro">
+            <div>
+              <h2 class="panel-title">Branch capacity detail</h2>
+              <div class="panel-subtitle" id="slotLedgerSubtitle">
+                Select a branch row to open its full TDC and PDC detail.
+              </div>
+            </div>
+            <div
+              class="slot-utilization-legend"
+              aria-label="Utilization level guide"
+            >
+              <span><i class="low"></i>Low &lt;35%</span>
+              <span><i class="moderate"></i>Moderate 35–69.9%</span>
+              <span><i class="high"></i>Healthy 70–100%</span>
+              <span><i class="overCapacity"></i>Over allocation &gt;100%</span>
+              <span><i class="noData"></i>No usable percentage</span>
+            </div>
+          </div>
+
+          <div class="slot-ledger-head" aria-hidden="true">
+            <span>Branch</span>
+            <span>Latest slot record</span>
+            <span class="number">Weekly allocation</span>
+            <span>Used / idle</span>
+            <span class="number">Utilization</span>
+            <span>Change from prior record</span>
+          </div>
+          <div class="slot-ledger-rows" id="slotUtilizationRows"></div>
+        </section>
+
+        <?!= include('ui/views/SlotSharingPanel'); ?>
+
+        <div class="footer-note">
+          “Current” is not an all-time average. It combines each branch’s latest
+          usable slot record inside the selected dates. “Selected-period
+          average” combines all usable weekly slot records inside those dates.
+        </div>
+      </main>

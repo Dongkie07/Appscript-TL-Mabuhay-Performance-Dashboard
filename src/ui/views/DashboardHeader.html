@@ -1,0 +1,137 @@
+      <header class="topbar">
+        <div class="identity">
+          <div class="mark" aria-hidden="true">TL</div>
+          <div>
+            <div class="eyebrow">Up to Date Dashboard</div>
+            <h1>TL Mabuhay Driving School Performance Dashboard</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="status-pill" id="modePill">
+            <span class="status-dot"></span>
+            <span id="modeText">Read-only Sheet connection</span>
+          </div>
+          <button class="button" id="refreshButton" type="button">
+            <span class="refresh-icon" aria-hidden="true">↻</span>Refresh
+          </button>
+        </div>
+      </header>
+
+      <div class="error-banner hidden" id="errorBanner" role="alert"></div>
+
+      <nav
+        class="dashboard-view-tabs"
+        aria-label="Dashboard views"
+        role="tablist"
+      >
+        <button
+          class="dashboard-view-tab active"
+          id="overviewTab"
+          data-dashboard-view="overviewView"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="overviewView"
+        >
+          Overview
+        </button>
+        <button
+          class="dashboard-view-tab"
+          id="slotUtilizationTab"
+          data-dashboard-view="slotUtilizationView"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="slotUtilizationView"
+        >
+          TDC &amp; PDC Slot Utilization
+        </button>
+
+      </nav>
+
+      <section class="filter-card" aria-label="Dashboard filters">
+        <div class="field">
+          <label for="startDate">Start date</label>
+          <input
+            id="startDate"
+            type="date"
+            aria-describedby="startDateHelp"
+          >
+          <small class="field-help" id="startDateHelp">
+            Beginning of the reporting period.
+          </small>
+        </div>
+
+        <div class="field">
+          <label for="endDate">End date</label>
+          <input
+            id="endDate"
+            type="date"
+            aria-describedby="endDateHelp"
+          >
+          <small class="field-help" id="endDateHelp">
+            End of the reporting period.
+          </small>
+        </div>
+
+        <div class="field">
+          <label for="regionFilter">Region</label>
+          <select
+            id="regionFilter"
+            aria-describedby="regionFilterHelp"
+          >
+            <option value="ALL">All regions</option>
+          </select>
+          <small class="field-help" id="regionFilterHelp">
+            Select a region to shorten the branch list.
+          </small>
+        </div>
+
+        <div class="field branch-filter-field">
+          <label for="branchFilter">Branch</label>
+          <select
+            id="branchFilter"
+            aria-describedby="branchFilterStatus"
+          >
+            <option value="ALL">All branches</option>
+          </select>
+          <small
+            class="field-help"
+            id="branchFilterStatus"
+            aria-live="polite"
+          >
+            Loading available branches…
+          </small>
+        </div>
+
+        <div class="field filter-action-field">
+          <span class="field-label-spacer" aria-hidden="true">
+            Action
+          </span>
+          <button
+            class="button primary filter-action"
+            id="applyButton"
+            type="button"
+          >
+            Apply filters
+          </button>
+          <small class="field-help">
+            Updates the dashboard using your selection.
+          </small>
+        </div>
+      </section>
+
+      <div class="presets">
+        <button class="preset" data-preset="week" type="button">
+          This week
+        </button>
+        <button class="preset" data-preset="2weeks" type="button">
+          Last 2 weeks
+        </button>
+        <button class="preset" data-preset="all" type="button">
+          All available data
+        </button>
+        <span class="date-caption" id="dateCaption"
+          >Loading available period…</span
+        >
+      </div>

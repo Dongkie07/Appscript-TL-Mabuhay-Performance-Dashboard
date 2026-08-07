@@ -1,0 +1,167 @@
+    function renderExecutiveTrendChart(rawPoints) {
+      renderExecutiveTrendChartInto(
+        document.getElementById("executiveSalesTrendChart"),
+        rawPoints,
+        "Reported service sales trend",
+      );
+    }
+    function renderExecutiveTrendChartInto(host, rawPoints, ariaLabel) {
+      const points = (rawPoints || []).map((point) => ({
+        key: point.key || "",
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+        transactions: Number(point.transactions) || 0,
+      }));
+
+      if (!host) return;
+
+      if (!points.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No reported service sales for this selection.</div>';
+        return;
+      }
+
+      const gradientId = `${host.id || "executiveSalesTrend"}Area`;
+      const width = 900;
+      const height = 285;
+      const pad = { top: 18, right: 24, bottom: 44, left: 67 };
+      const chartWidth = width - pad.left - pad.right;
+      const chartHeight = height - pad.top - pad.bottom;
+      const maximum = Math.max(1, ...points.map((point) => point.sales));
+      const yMaximum = calculateNiceMaximum(maximum);
+      const xStep = points.length > 1 ? chartWidth / (points.length - 1) : 0;
+      const coordinates = points.map((point, index) => ({
+        x:
+          pad.left +
+          (points.length === 1 ? chartWidth / 2 : index * xStep),
+        y: pad.top + chartHeight - (point.sales / yMaximum) * chartHeight,
+        point,
+      }));
+      const linePath = coordinates
+        .map(
+          (item, index) =>
+            `${index ? "L" : "M"} ${item.x.toFixed(1)} ${item.y.toFixed(1)}`,
+        )
+        .join(" ");
+      const areaPath =
+        `${linePath} L ${coordinates[coordinates.length - 1].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} L ${coordinates[0].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} Z`;
+      const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+
+      const gridLines = Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const y = pad.top + chartHeight - ratio * chartHeight;
+        const value = yMaximum * ratio;
+        return `
+          <line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"
+            stroke="#e9e2d5" stroke-width="1"/>
+          <text x="${pad.left - 10}" y="${y + 4}" text-anchor="end"
+            fill="#747c89" font-size="10">${escapeHtml(formatCompactCurrency(value))}</text>
+        `;
+      }).join("");
+
+      const xLabels = coordinates
+        .map((item, index) => {
+          if (index % labelEvery !== 0 && index !== coordinates.length - 1) {
+            return "";
+          }
+          return `
+            <text x="${item.x}" y="${height - 12}" text-anchor="middle"
+              fill="#747c89" font-size="10">${escapeHtml(item.point.label)}</text>
+          `;
+        })
+        .join("");
+
+      const circles = coordinates
+        .map(
+          (item) => `
+            <circle class="executive-sales-point"
+              cx="${item.x}" cy="${item.y}" r="5"
+              fill="#ffffff" stroke="#c79224" stroke-width="2"
+              tabindex="0" role="img"
+              data-label="${escapeHtml(item.point.label)}"
+              data-sales="${item.point.sales}"
+              data-transactions="${item.point.transactions}"
+              aria-label="${escapeHtml(
+                `${item.point.label}: ${formatCurrency(item.point.sales)}`,
+              )}">
+            </circle>
+          `,
+        )
+        .join("");
+
+      host.innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" role="img"
+          aria-label="${escapeHtml(ariaLabel || "Reported service sales trend")}">
+          <defs>
+            <linearGradient id="${escapeHtml(gradientId)}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e4b84e" stop-opacity="0.30"/>
+              <stop offset="100%" stop-color="#e4b84e" stop-opacity="0.03"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          <path d="${areaPath}" fill="url(#${escapeHtml(gradientId)})"/>
+          <path d="${linePath}" fill="none" stroke="#0b1f3a" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          ${circles}
+          ${xLabels}
+        </svg>
+      `;
+
+      enableExecutiveChartTooltip(host);
+    }
+    function enableExecutiveChartTooltip(host) {
+      let tooltip = document.getElementById("executiveChartTooltip");
+
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.id = "executiveChartTooltip";
+        tooltip.className = "executive-chart-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+      }
+
+      function show(point, clientX, clientY) {
+        const transactions = Number(point.dataset.transactions) || 0;
+        tooltip.innerHTML = `
+          <strong>${escapeHtml(point.dataset.label)}</strong>
+          <span>${escapeHtml(formatCurrency(point.dataset.sales))}</span>
+          <span>${escapeHtml(formatNumber(transactions))} transactions</span>
+        `;
+        tooltip.classList.add("visible");
+
+        const gap = 14;
+        const width = tooltip.offsetWidth;
+        const height = tooltip.offsetHeight;
+        let left = clientX + gap;
+        let top = clientY - height - gap;
+
+        if (left + width > window.innerWidth - 10) {
+          left = clientX - width - gap;
+        }
+        if (top < 10) top = clientY + gap;
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function hide() {
+        tooltip.classList.remove("visible");
+      }
+
+      host.querySelectorAll(".executive-sales-point").forEach((point) => {
+        point.addEventListener("pointerenter", (event) => {
+          show(point, event.clientX, event.clientY);
+        });
+        point.addEventListener("pointermove", (event) => {
+          show(point, event.clientX, event.clientY);
+        });
+        point.addEventListener("pointerleave", hide);
+        point.addEventListener("blur", hide);
+        point.addEventListener("focus", () => {
+          const box = point.getBoundingClientRect();
+          show(point, box.left + box.width / 2, box.top);
+        });
+      });
+    }

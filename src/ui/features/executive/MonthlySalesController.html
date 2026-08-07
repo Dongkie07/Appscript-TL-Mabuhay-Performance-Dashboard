@@ -1,0 +1,335 @@
+    function addMonthlySalesView() {
+      const tabs = document.querySelector(".dashboard-view-tabs");
+      const dashboard = document.getElementById("dashboard");
+
+      if (!tabs || !dashboard || document.getElementById("monthlySalesTab")) {
+        return;
+      }
+
+      const tab = document.createElement("button");
+      tab.id = "monthlySalesTab";
+      tab.className = "dashboard-view-tab";
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", "false");
+      tab.setAttribute("aria-controls", "monthlySalesView");
+      tab.textContent = "Monthly Sales";
+      tab.addEventListener("click", () => {
+        showMonthlySalesView(true);
+      });
+      tabs.appendChild(tab);
+
+      const view = document.createElement("main");
+      view.id = "monthlySalesView";
+      view.className = "hidden executive-monthly-view";
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", "monthlySalesTab");
+      view.innerHTML = `
+        <section class="executive-monthly-hero">
+          <div>
+            <div class="eyebrow">Monthly target performance</div>
+            <h2>Monthly Sales Detail</h2>
+            <p>Sales, monthly targets, and achievement values aligned with SLSAch%.</p>
+          </div>
+          <label class="executive-month-field">
+            <span>Reporting month</span>
+            <input id="executiveMonthPicker" type="month">
+          </label>
+        </section>
+        <section class="executive-monthly-kpis">
+          <article class="executive-monthly-kpi">
+            <span>Sales</span>
+            <strong id="monthlyOfficialCollections">—</strong>
+            <small>SLSAch% total</small>
+          </article>
+          <article class="executive-monthly-kpi">
+            <span>Monthly target</span>
+            <strong id="monthlySalesTarget">—</strong>
+            <small>Monthly total</small>
+          </article>
+          <article class="executive-monthly-kpi">
+            <span>Target achievement</span>
+            <strong id="monthlyAverageAchievement">—</strong>
+            <small id="monthlyAchievementNote">Based on SLSAch% calculation</small>
+          </article>
+        </section>
+        <section class="executive-monthly-regions" id="monthlyRegionGroups">
+          <div class="empty-chart">Loading monthly branch details…</div>
+        </section>
+      `;
+      dashboard.appendChild(view);
+
+      document
+        .getElementById("executiveMonthPicker")
+        ?.addEventListener("change", handleMonthlyPickerChange);
+
+      document
+        .querySelectorAll(".dashboard-view-tab:not(#monthlySalesTab)")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            executiveState.monthlyActive = false;
+            document.getElementById("monthlySalesView")?.classList.add("hidden");
+            document.getElementById("monthlySalesTab")?.classList.remove("active");
+            document
+              .getElementById("monthlySalesTab")
+              ?.setAttribute("aria-selected", "false");
+          });
+        });
+    }
+    function showMonthlySalesView(activate) {
+      const monthlyView = document.getElementById("monthlySalesView");
+      const monthlyTab = document.getElementById("monthlySalesTab");
+
+      if (!monthlyView || !monthlyTab) return;
+
+      executiveState.monthlyActive = activate !== false;
+      executiveState.trendsActive = false;
+      document.getElementById("overviewView")?.classList.add("hidden");
+      document.getElementById("slotUtilizationView")?.classList.add("hidden");
+      document.getElementById("salesTrendsView")?.classList.add("hidden");
+      monthlyView.classList.remove("hidden");
+
+      document.querySelectorAll(".dashboard-view-tab").forEach((button) => {
+        const active = button.id === "monthlySalesTab";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      syncMonthPicker();
+
+      const cachedSupport = getCachedSelectedMonthSupport();
+
+      if (cachedSupport) {
+        renderMonthlySales(cachedSupport);
+        return;
+      }
+
+      if (mainRequestWillPreloadSelectedMonth()) {
+        showMonthlyLoading("Preparing monthly detail…");
+        return;
+      }
+
+      showMonthlyLoading("Loading the selected month…");
+      loadSelectedMonthSupport(false);
+    }
+    function supportMatchesSelectedMonth(supportData) {
+      const selectedKey = getSelectedMonthCacheKey();
+      const supportKey = getSupportMonthCacheKey(supportData);
+
+      return Boolean(selectedKey && supportKey === selectedKey);
+    }
+    function handleMonthlyPickerChange() {
+      executiveState.monthlyActive = true;
+
+      const cachedSupport = getCachedSelectedMonthSupport();
+
+      if (cachedSupport) {
+        renderMonthlySales(cachedSupport);
+        return;
+      }
+
+      if (mainRequestWillPreloadSelectedMonth()) {
+        showMonthlyLoading("Preparing monthly detail…");
+        return;
+      }
+
+      showMonthlyLoading("Loading the selected month…");
+      loadSelectedMonthSupport(false);
+    }
+    function mainRequestWillPreloadSelectedMonth() {
+      if (
+        !executiveState.supportLoading &&
+        !isBaseDashboardStillLoading()
+      ) {
+        return false;
+      }
+
+      const selectedMonth =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+      const endMonth = String(filters.endDate || "").slice(0, 7);
+
+      return Boolean(
+        /^\d{4}-\d{2}$/.test(selectedMonth) &&
+        selectedMonth === endMonth
+      );
+    }
+    function isBaseDashboardStillLoading() {
+      const salesValue = document.getElementById("kpiSales");
+      const text = String(salesValue?.textContent || "").trim();
+
+      return !/\d/.test(text);
+    }
+    function loadSelectedMonthSupport(forceRefresh) {
+      if (!isAppsScriptRuntime()) return;
+
+      const request = buildSelectedMonthRequest(forceRefresh === true);
+
+      if (!request) return;
+
+      const cacheKey = getMonthlyCacheKey(
+        request.monthValue,
+        request.filters.region,
+        request.filters.branch,
+      );
+
+      if (!forceRefresh && executiveState.monthlyCache[cacheKey]) {
+        renderMonthlySales(executiveState.monthlyCache[cacheKey]);
+        return;
+      }
+
+      if (executiveState.monthlyLoadingKey === cacheKey) return;
+
+      const requestVersion = executiveState.monthlyRequestVersion + 1;
+      executiveState.monthlyRequestVersion = requestVersion;
+      executiveState.monthlyLoadingKey = cacheKey;
+
+      google.script.run
+        .withSuccessHandler((supportData) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          cacheMonthlySupport(supportData);
+
+          if (
+            executiveState.monthlyActive &&
+            getSelectedMonthCacheKey() === cacheKey
+          ) {
+            renderMonthlySales(
+              executiveState.monthlyCache[cacheKey] || supportData,
+            );
+          }
+        })
+        .withFailureHandler((error) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          console.warn(
+            "Monthly sales detail could not be loaded:",
+            error?.message || error,
+          );
+          showMonthlyLoading(
+            "Monthly detail could not be loaded. Please try Refresh.",
+          );
+        })
+        .getExecutiveSalesSupport(request.filters);
+    }
+    function buildSelectedMonthRequest(forceRefresh) {
+      const value =
+        document.getElementById("executiveMonthPicker")?.value || "";
+
+      if (!/^\d{4}-\d{2}$/.test(value)) return null;
+
+      const [year, month] = value.split("-").map(Number);
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0);
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
+      const minimum = parseIsoDate(
+        startInput?.min || toIsoDate(monthStart),
+      );
+      const maximum = parseIsoDate(
+        endInput?.max || toIsoDate(monthEnd),
+      );
+      const boundedStart = monthStart < minimum ? minimum : monthStart;
+      const boundedEnd = monthEnd > maximum ? maximum : monthEnd;
+      const currentFilters = readExecutiveFilters();
+
+      if (boundedStart > boundedEnd) return null;
+
+      return {
+        monthValue: value,
+        filters: {
+          startDate: toIsoDate(boundedStart),
+          endDate: toIsoDate(boundedEnd),
+          region: currentFilters.region,
+          branch: currentFilters.branch,
+          forceRefresh: forceRefresh === true,
+        },
+      };
+    }
+    function primeMonthlyCacheFromSupport(supportData) {
+      cacheMonthlySupport(supportData);
+      cacheMonthlySupport(supportData?.monthlySnapshot);
+    }
+    function cacheMonthlySupport(supportData) {
+      const cacheKey = getSupportMonthCacheKey(supportData);
+
+      if (!cacheKey) return "";
+
+      executiveState.monthlyCache[cacheKey] = supportData;
+      return cacheKey;
+    }
+    function getCachedSelectedMonthSupport() {
+      const cacheKey = getSelectedMonthCacheKey();
+
+      if (!cacheKey) return null;
+
+      if (executiveState.monthlyCache[cacheKey]) {
+        return executiveState.monthlyCache[cacheKey];
+      }
+
+      if (supportMatchesSelectedMonth(executiveState.latestSupport)) {
+        cacheMonthlySupport(executiveState.latestSupport);
+        return executiveState.latestSupport;
+      }
+
+      return null;
+    }
+    function getSelectedMonthCacheKey() {
+      const monthValue =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+
+      if (!/^\d{4}-\d{2}$/.test(monthValue)) return "";
+
+      return getMonthlyCacheKey(
+        monthValue,
+        filters.region,
+        filters.branch,
+      );
+    }
+    function getSupportMonthCacheKey(supportData) {
+      const applied = supportData?.filtersApplied || {};
+      const startDate = String(applied.startDate || "");
+      const endDate = String(applied.endDate || "");
+      const startMonth = startDate.slice(0, 7);
+      const endMonth = endDate.slice(0, 7);
+
+      if (
+        !/^\d{4}-\d{2}$/.test(startMonth) ||
+        startMonth !== endMonth
+      ) {
+        return "";
+      }
+
+      return getMonthlyCacheKey(
+        startMonth,
+        applied.region || "ALL",
+        applied.branch || "ALL",
+      );
+    }
+    function getMonthlyCacheKey(monthValue, region, branch) {
+      return [
+        String(monthValue || ""),
+        String(region || "ALL"),
+        String(branch || "ALL"),
+      ].join("|");
+    }
+    function showMonthlyLoading(message) {
+      const host = document.getElementById("monthlyRegionGroups");
+
+      if (host) {
+        host.innerHTML = `<div class="empty-chart">${escapeHtml(
+          message || "Loading monthly detail…",
+        )}</div>`;
+      }
+    }
+    function syncMonthPicker() {
+      const picker = document.getElementById("executiveMonthPicker");
+      const endValue = document.getElementById("endDate")?.value;
+
+      if (picker && /^\d{4}-\d{2}/.test(endValue || "")) {
+        picker.value = endValue.slice(0, 7);
+      }
+    }

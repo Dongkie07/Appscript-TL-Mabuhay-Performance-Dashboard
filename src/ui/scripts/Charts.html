@@ -1,0 +1,285 @@
+    function renderSalesTrendChart(rawPoints) {
+      const host = getElementById("salesTrendChart");
+      if (!host) return;
+
+      // 1. Clean and validate incoming points so NaN values never break the SVG path
+      const points = (rawPoints || []).filter(
+        (point) => point && typeof point.sales !== "undefined"
+      ).map((point) => ({
+        key: point.key || "",
+        label: point.label || "—",
+        sales: Number(point.sales) || 0,
+        transactions: Number(point.transactions) || 0
+      }));
+
+      if (!points.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No sales trend data for this selection.</div>';
+        return;
+      }
+
+      const width = 900;
+      const height = 285;
+      const pad = { top: 18, right: 24, bottom: 42, left: 67 };
+      const chartWidth = width - pad.left - pad.right;
+      const chartHeight = height - pad.top - pad.bottom;
+      const maxValue = Math.max(1, ...points.map((point) => point.sales));
+      const yMax = calculateNiceMaximum(maxValue);
+      const xStep =
+        points.length > 1 ? chartWidth / (points.length - 1) : chartWidth;
+        
+      const coords = points.map((point, index) => ({
+        x: pad.left + (points.length === 1 ? chartWidth / 2 : index * xStep),
+        y: pad.top + chartHeight - (point.sales / yMax) * chartHeight,
+        point,
+      }));
+
+      const linePath = coords
+        .map(
+          (item, index) =>
+            `${index ? "L" : "M"} ${item.x.toFixed(1)} ${item.y.toFixed(1)}`,
+        )
+        .join(" ");
+        
+      const areaPath =
+        `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} L ${coords[0].x.toFixed(1)} ` +
+        `${(pad.top + chartHeight).toFixed(1)} Z`;
+
+      const yLines = Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const y = pad.top + chartHeight - ratio * chartHeight;
+        const value = yMax * ratio;
+        return `
+            <line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"
+              stroke="#e9e2d5" stroke-width="1"/>
+            <text x="${pad.left - 10}" y="${y + 4}" text-anchor="end"
+              fill="#747c89" font-size="10">${escapeHtml(formatCompactCurrency(value))}</text>
+          `;
+      }).join("");
+
+      const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+      const xLabels = coords
+        .map((item, index) => {
+          const isRegularLabel = index % labelEvery === 0;
+          const isLastLabel = index === coords.length - 1;
+
+          if (!isRegularLabel && !isLastLabel) {
+            return "";
+          }
+
+          return `
+              <text x="${item.x}" y="${height - 13}" text-anchor="middle"
+                fill="#747c89" font-size="10">${escapeHtml(item.point.label)}</text>
+            `;
+        })
+        .join("");
+
+      const circles = coords
+        .map(
+          (item) => `
+              <circle
+                class="sales-point"
+                cx="${item.x}"
+                cy="${item.y}"
+                r="5"
+                fill="#ffffff"
+                stroke="#c79224"
+                stroke-width="2"
+                tabindex="0"
+                role="img"
+                data-label="${escapeHtml(item.point.label)}"
+                data-sales="${Number(item.point.sales) || 0}"
+                aria-label="${escapeHtml(
+                  `${item.point.label}: ${formatExactCurrency(item.point.sales)}`,
+                )}"
+              >
+                <title>${escapeHtml(
+                  `${item.point.label}: ${formatExactCurrency(item.point.sales)}`,
+                )}</title>
+              </circle>
+            `,
+        )
+        .join("");
+
+      host.innerHTML = `
+          <svg viewBox="0 0 ${width} ${height}" role="img"
+            aria-label="Sales trend chart">
+            <defs>
+              <linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#e4b84e" stop-opacity="0.30"/>
+                <stop offset="100%" stop-color="#e4b84e" stop-opacity="0.03"/>
+              </linearGradient>
+            </defs>
+            ${yLines}
+            <path d="${areaPath}" fill="url(#salesArea)"/>
+            <path d="${linePath}" fill="none" stroke="#0b1f3a" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+            ${circles}
+            ${xLabels}
+          </svg>
+        `;
+
+      enableSalesTrendTooltip(host);
+    }
+    function enableSalesTrendTooltip(host) {
+      let tooltip = document.getElementById("salesTrendTooltip");
+
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.id = "salesTrendTooltip";
+        tooltip.className = "sales-trend-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+      }
+
+      function showTooltip(point, clientX, clientY) {
+        const dateLabel = document.createElement("strong");
+        const amountLabel = document.createElement("span");
+
+        dateLabel.textContent = point.dataset.label;
+        amountLabel.textContent = formatExactCurrency(point.dataset.sales);
+
+        tooltip.replaceChildren(dateLabel, amountLabel);
+        tooltip.classList.add("visible");
+
+        const gap = 14;
+        const tooltipWidth = tooltip.offsetWidth;
+        const tooltipHeight = tooltip.offsetHeight;
+        let left = clientX + gap;
+        let top = clientY - tooltipHeight - gap;
+
+        if (left + tooltipWidth > window.innerWidth - 10) {
+          left = clientX - tooltipWidth - gap;
+        }
+
+        if (top < 10) {
+          top = clientY + gap;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function hideTooltip() {
+        tooltip.classList.remove("visible");
+      }
+
+      host.querySelectorAll(".sales-point").forEach((point) => {
+        point.addEventListener("pointerenter", (event) => {
+          showTooltip(point, event.clientX, event.clientY);
+        });
+
+        point.addEventListener("pointermove", (event) => {
+          showTooltip(point, event.clientX, event.clientY);
+        });
+
+        point.addEventListener("pointerleave", hideTooltip);
+
+        point.addEventListener("focus", () => {
+          const pointPosition = point.getBoundingClientRect();
+
+          showTooltip(
+            point,
+            pointPosition.left + pointPosition.width / 2,
+            pointPosition.top,
+          );
+        });
+
+        point.addEventListener("blur", hideTooltip);
+      });
+    }
+    function renderServiceMixChart(series) {
+      const donut = getElementById("serviceDonut");
+      const legend = getElementById("serviceLegend");
+      legend.replaceChildren();
+
+      const total = (series || []).reduce((sum, item) => sum + item.value, 0);
+      getElementById("serviceTotal").textContent = formatCompactCurrency(total);
+
+      if (!series || !series.length || total <= 0) {
+        donut.style.background = "#e9edf1";
+        const empty = document.createElement("div");
+        empty.className = "empty-chart";
+        empty.textContent = "No service sales data.";
+        legend.appendChild(empty);
+        return;
+      }
+
+      let running = 0;
+      const segments = series.map((item, index) => {
+        const start = (running / total) * 100;
+        running += item.value;
+        const end = (running / total) * 100;
+        return `${CHART_COLORS[index % CHART_COLORS.length]} ${start}% ${end}%`;
+      });
+      donut.style.background = `conic-gradient(${segments.join(",")})`;
+
+      series.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "legend-row";
+
+        const dot = document.createElement("span");
+        dot.className = "legend-dot";
+        dot.style.background = CHART_COLORS[index % CHART_COLORS.length];
+
+        const label = document.createElement("span");
+        label.className = "legend-label";
+        label.textContent = item.label;
+        label.title = item.label;
+
+        const value = document.createElement("span");
+        value.className = "legend-value";
+        value.textContent = `${((item.value / total) * 100).toFixed(1)}%`;
+
+        row.append(dot, label, value);
+        legend.appendChild(row);
+      });
+    }
+    function renderHorizontalBars(hostId, series, formatter, showTarget) {
+      const host = getElementById(hostId);
+      host.replaceChildren();
+      if (!series || !series.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-chart";
+        empty.textContent = "No data for this selection.";
+        host.appendChild(empty);
+        return;
+      }
+
+      const maxValue = Math.max(1, ...series.map((item) => item.value));
+      series.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+
+        const head = document.createElement("div");
+        head.className = "bar-head";
+        const label = document.createElement("span");
+        label.className = "bar-label";
+        label.textContent = item.label;
+        label.title = item.label;
+        const value = document.createElement("span");
+        value.className = "bar-value";
+        value.textContent = formatter(item.value);
+        head.append(label, value);
+
+        const track = document.createElement("div");
+        track.className = "bar-track";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${Math.max(1.5, (item.value / maxValue) * 100)}%`;
+        track.appendChild(fill);
+
+        row.append(head, track);
+        if (showTarget) {
+          const note = document.createElement("div");
+          note.className = "bar-note";
+          note.textContent =
+            item.target > 0
+              ? `${formatPercent((item.value / item.target) * 100)} of target`
+              : "No target in selected rows";
+          row.appendChild(note);
+        }
+        host.appendChild(row);
+      });
+    }

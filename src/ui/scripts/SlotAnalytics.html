@@ -1,0 +1,405 @@
+    function createSlotAnalyticsPanel(branch, courseCode) {
+      const analytics = calculateSlotAnalytics(branch);
+      const panel = document.createElement("section");
+
+      panel.className = "slot-analytics-panel";
+      panel.append(
+        createSlotAnalyticsSummary(
+          branch,
+          courseCode,
+          analytics,
+        ),
+        createSlotAnalyticsInsight(branch, analytics),
+        createSlotAnalyticsTable(analytics.history),
+        createSlotAnalyticsFooter(branch, analytics),
+      );
+
+      return panel;
+    }
+    function calculateSlotAnalytics(branch) {
+      const history = (branch.weeklyHistory || [])
+        .slice()
+        .sort(
+          (firstRow, secondRow) =>
+            firstRow.periodKey - secondRow.periodKey,
+        );
+      const usableRows = history.filter(
+        (row) => row.utilization != null,
+      );
+      const latestRow =
+        history.find(
+          (row) =>
+            row.periodKey === branch.latest.periodKey,
+        ) || history[history.length - 1] || null;
+      const previousRow = branch.previous
+        ? history.find(
+            (row) =>
+              row.periodKey === branch.previous.periodKey,
+          ) || null
+        : null;
+      const totalSales = history.reduce(
+        (sum, row) => sum + (Number(row.sales) || 0),
+        0,
+      );
+      const currentSales = latestRow
+        ? Number(latestRow.sales) || 0
+        : 0;
+      const previousSales = previousRow
+        ? Number(previousRow.sales) || 0
+        : null;
+      const salesChange =
+        previousSales == null
+          ? null
+          : currentSales - previousSales;
+      const salesChangePercent =
+        previousSales && previousSales !== 0
+          ? (salesChange / Math.abs(previousSales)) * 100
+          : null;
+      const peakRow = usableRows.length
+        ? usableRows.reduce((best, row) =>
+            row.utilization > best.utilization ? row : best,
+          )
+        : null;
+      const lowestRow = usableRows.length
+        ? usableRows.reduce((lowest, row) =>
+            row.utilization < lowest.utilization
+              ? row
+              : lowest,
+          )
+        : null;
+
+      return {
+        history,
+        latestRow,
+        previousRow,
+        totalSales,
+        currentSales,
+        previousSales,
+        salesChange,
+        salesChangePercent,
+        peakRow,
+        lowestRow,
+      };
+    }
+    function createSlotAnalyticsSummary(
+      branch,
+      courseCode,
+      analytics,
+    ) {
+      const section = document.createElement("div");
+      const heading = document.createElement("div");
+      const title = document.createElement("div");
+      const eyebrow = document.createElement("span");
+      const strong = document.createElement("strong");
+      const meta = document.createElement("small");
+      const trendPresentation = getTrendPresentation(
+        branch.trend.status,
+      );
+      const trendBadge = document.createElement("span");
+      const statistics = document.createElement("div");
+
+      section.className = "slot-analytics-summary";
+      heading.className = "slot-analytics-heading";
+      title.className = "slot-analytics-title";
+      eyebrow.textContent = `${courseCode} weekly capacity`;
+      strong.textContent = branch.branchName;
+      meta.textContent = branch.region;
+      title.append(eyebrow, strong, meta);
+
+      trendBadge.className =
+        `slot-trend-badge ${trendPresentation.className}`;
+      trendBadge.textContent =
+        `${trendPresentation.symbol} ${trendPresentation.label}`;
+      heading.append(title, trendBadge);
+
+      statistics.className = "slot-analytics-stat-grid";
+      statistics.append(
+        createAnalyticsStatistic(
+          "Current utilization",
+          branch.latest.utilization == null
+            ? "—"
+            : formatPercent(branch.latest.utilization),
+          branch.latest.periodLabel,
+        ),
+        createAnalyticsStatistic(
+          "Slots used",
+          branch.latest.allocated > 0
+            ? `${formatCount(branch.latest.used)} of ${formatCount(
+                branch.latest.allocated,
+              )}`
+            : "—",
+          "Latest usable slot record",
+        ),
+        createAnalyticsStatistic(
+          branch.latest.aboveAllocation > 0
+            ? "Above allocation"
+            : "Idle slots",
+          branch.latest.allocated == null
+            ? "—"
+            : formatCount(
+                branch.latest.aboveAllocation > 0
+                  ? branch.latest.aboveAllocation
+                  : branch.latest.idle,
+              ),
+          branch.latest.allocated == null
+            ? "No usable allocation record"
+            : branch.latest.aboveAllocation > 0
+              ? "Validate capacity and usage"
+              : "Unused in the latest record",
+        ),
+        createAnalyticsStatistic(
+          "Period average",
+          branch.periodAverage.utilization == null
+            ? "—"
+            : formatPercent(
+                branch.periodAverage.utilization,
+              ),
+          `${formatCount(
+            branch.periodAverage.reports,
+          )} weekly records`,
+        ),
+        createAnalyticsStatistic(
+          "Selected-period sales",
+          analytics.history.length
+            ? formatExactCurrency(analytics.totalSales)
+            : "—",
+          analytics.history.length
+            ? "Encoded sales in listed weeks"
+            : "No slot weeks available for comparison",
+        ),
+      );
+
+      section.append(heading, statistics);
+      return section;
+    }
+    function createAnalyticsStatistic(label, value, note) {
+      const card = document.createElement("div");
+      const labelElement = document.createElement("span");
+      const valueElement = document.createElement("strong");
+      const noteElement = document.createElement("small");
+
+      card.className = "slot-analytics-stat";
+      labelElement.textContent = label;
+      valueElement.className = "mono";
+      valueElement.textContent = value;
+      noteElement.textContent = note || "";
+      card.append(labelElement, valueElement, noteElement);
+      return card;
+    }
+    function createSlotAnalyticsInsight(branch, analytics) {
+      const container = document.createElement("div");
+      const trendPresentation = getTrendPresentation(
+        branch.trend.status,
+      );
+      const badge = document.createElement("span");
+      const text = document.createElement("p");
+      const action = document.createElement("strong");
+      const parts = [];
+
+      container.className =
+        `slot-analytics-insight ${trendPresentation.className}`;
+      badge.className =
+        `slot-trend-badge ${trendPresentation.className}`;
+      badge.textContent =
+        `${trendPresentation.symbol} ${trendPresentation.label}`;
+
+      if (branch.trend.changePercentagePoints == null) {
+        parts.push(
+          "No prior usable slot record is available for comparison.",
+        );
+      } else {
+        parts.push(
+          `Utilization changed by ${formatSignedPercentagePoints(
+            branch.trend.changePercentagePoints,
+          )} from ${branch.previous.periodLabel}.`,
+        );
+      }
+
+      if (analytics.salesChange != null) {
+        const percentText =
+          analytics.salesChangePercent == null
+            ? ""
+            : ` (${formatSignedPercent(
+                analytics.salesChangePercent,
+              )})`;
+
+        parts.push(
+          `Latest-week sales changed by ${formatSignedCurrency(
+            analytics.salesChange,
+          )}${percentText}.`,
+        );
+      }
+
+      text.textContent = parts.join(" ");
+      action.textContent =
+        `Suggested action: ${getSlotUtilizationAction(
+          branch.latest.utilization,
+          branch,
+        )}`;
+      container.append(badge, text, action);
+      return container;
+    }
+    function createSlotAnalyticsTable(history) {
+      const section = document.createElement("section");
+      const heading = document.createElement("div");
+      const title = document.createElement("h3");
+      const subtitle = document.createElement("span");
+      const wrap = document.createElement("div");
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const body = document.createElement("tbody");
+      const headRow = document.createElement("tr");
+
+      section.className = "slot-analytics-history";
+      heading.className = "slot-analytics-history-heading";
+      title.textContent = "Weekly performance history";
+      subtitle.textContent =
+        "Allocation, usage, utilization, and encoded sales";
+      heading.append(title, subtitle);
+
+      [
+        "Week",
+        "Used",
+        "Allocation",
+        "Idle",
+        "Utilization",
+        "Sales",
+      ].forEach((label) => {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        if (label !== "Week") {
+          cell.className = "number";
+        }
+        headRow.appendChild(cell);
+      });
+      head.appendChild(headRow);
+
+      history.forEach((row) => {
+        const tableRow = document.createElement("tr");
+        const utilizationLevel = getSlotUtilizationLevel(
+          row.utilization,
+        );
+
+        tableRow.append(
+          createAnalyticsTableCell(
+            getCompactWeekLabel(row),
+            false,
+            row.periodLabel,
+          ),
+          createAnalyticsTableCell(
+            row.used == null ? "—" : formatCount(row.used),
+            true,
+          ),
+          createAnalyticsTableCell(
+            row.allocated == null
+              ? "—"
+              : formatCount(row.allocated),
+            true,
+          ),
+          createAnalyticsTableCell(
+            row.idle == null ? "—" : formatCount(row.idle),
+            true,
+          ),
+          createAnalyticsUtilizationCell(
+            row.utilization,
+            utilizationLevel,
+          ),
+          createAnalyticsTableCell(
+            formatExactCurrency(row.sales),
+            true,
+          ),
+        );
+        body.appendChild(tableRow);
+      });
+
+      if (!history.length) {
+        const emptyRow = document.createElement("tr");
+        const emptyCell = document.createElement("td");
+        emptyCell.colSpan = 6;
+        emptyCell.className = "slot-analytics-empty";
+        emptyCell.textContent =
+          "No weekly slot history is available in this selection.";
+        emptyRow.appendChild(emptyCell);
+        body.appendChild(emptyRow);
+      }
+
+      table.append(head, body);
+      wrap.className = "slot-analytics-table-wrap";
+      wrap.appendChild(table);
+      section.append(heading, wrap);
+      return section;
+    }
+    function createAnalyticsTableCell(
+      value,
+      isNumber,
+      title,
+    ) {
+      const cell = document.createElement("td");
+
+      cell.textContent = value;
+      if (isNumber) {
+        cell.className = "number mono";
+      }
+      if (title) {
+        cell.title = title;
+      }
+      return cell;
+    }
+    function createAnalyticsUtilizationCell(value, level) {
+      const cell = document.createElement("td");
+      const badge = document.createElement("span");
+
+      cell.className = "number";
+      badge.className =
+        `slot-analytics-utilization mono ${level}`;
+      badge.textContent =
+        value == null ? "—" : formatPercent(value);
+      cell.appendChild(badge);
+      return cell;
+    }
+    function createSlotAnalyticsFooter(branch, analytics) {
+      const footer = document.createElement("div");
+      const peak = document.createElement("span");
+      const low = document.createElement("span");
+      const services = document.createElement("span");
+
+      footer.className = "slot-analytics-footer";
+      peak.textContent = analytics.peakRow
+        ? `Peak: ${getCompactWeekLabel(
+            analytics.peakRow,
+          )} at ${formatPercent(
+            analytics.peakRow.utilization,
+          )}`
+        : "Peak: no usable percentage";
+      low.textContent = analytics.lowestRow
+        ? `Lowest: ${getCompactWeekLabel(
+            analytics.lowestRow,
+          )} at ${formatPercent(
+            analytics.lowestRow.utilization,
+          )}`
+        : "Lowest: no usable percentage";
+      services.textContent = branch.serviceGroups?.length
+        ? `Service groups: ${branch.serviceGroups.join(", ")}`
+        : "Service groups: none identified";
+      footer.append(peak, low, services);
+      return footer;
+    }
+    function getCompactWeekLabel(row) {
+      const week = Number(row.periodKey) % 100;
+
+      return week > 0
+        ? `W${week}`
+        : row.periodLabel || "—";
+    }
+    function formatSignedCurrency(value) {
+      const numericValue = Number(value) || 0;
+      const sign = numericValue > 0 ? "+" : "";
+
+      return `${sign}${formatExactCurrency(numericValue)}`;
+    }
+    function formatSignedPercent(value) {
+      const numericValue = Number(value) || 0;
+      const sign = numericValue > 0 ? "+" : "";
+
+      return `${sign}${numericValue.toFixed(1)}%`;
+    }

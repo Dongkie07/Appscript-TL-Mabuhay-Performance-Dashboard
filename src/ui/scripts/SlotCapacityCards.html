@@ -1,0 +1,216 @@
+    function createCourseUtilizationCard(branch, courseCode) {
+      const capacity = getCourseCapacity(branch, courseCode);
+      const card = document.createElement("article");
+      card.className = "slot-course-card";
+
+      const header = document.createElement("div");
+      header.className = "slot-course-header";
+
+      const title = document.createElement("div");
+      const label = document.createElement("span");
+      label.className = "slot-course-label";
+      label.textContent = courseCode;
+      const subtitle = document.createElement("span");
+      subtitle.className = "slot-course-subtitle";
+      const courseName =
+        courseCode === "TDC"
+          ? "Theoretical driving course"
+          : "Practical driving course";
+      subtitle.textContent = capacity.currentPeriod
+        ? `${courseName} · Current: ${capacity.currentPeriod}`
+        : courseName;
+      title.append(label, subtitle);
+
+      header.append(
+        title,
+        createMetricBadge(capacity.utilization, "utilization"),
+      );
+      card.appendChild(header);
+
+      if (!capacity.hasData) {
+        card.appendChild(createNoCapacityDataMessage());
+        return card;
+      }
+
+      card.append(
+        createCapacityTrend(capacity),
+        createCapacityProgress(capacity),
+        createCapacityStatistics(capacity),
+      );
+
+      return card;
+    }
+    function getCourseCapacity(branch, courseCode) {
+      const propertyPrefix = courseCode.toLowerCase();
+      const allocated = branch[`${propertyPrefix}Allocated`];
+      const used = branch[`${propertyPrefix}Used`];
+      const utilization = branch[`${propertyPrefix}Utilization`];
+      const trend = branch[`${propertyPrefix}Trend`];
+      const hasData = allocated != null && used != null;
+
+      return {
+        allocated,
+        used,
+        utilization,
+        trend,
+        currentPeriod:
+          branch[`${propertyPrefix}CapacityPeriod`] ||
+          branch.capacityPeriod,
+        previousPeriod:
+          branch[`${propertyPrefix}PreviousCapacityPeriod`] ||
+          branch.previousCapacityPeriod,
+        idle: hasData ? Math.max(allocated - used, 0) : null,
+        aboveAllocation: hasData ? Math.max(used - allocated, 0) : null,
+        hasData,
+      };
+    }
+    function createNoCapacityDataMessage() {
+      const message = document.createElement("div");
+      message.className = "slot-no-data";
+      message.textContent =
+        "No slot allocation and usage were reported for this course.";
+      return message;
+    }
+    function createCapacityTrend(capacity) {
+      const trend = capacity.trend || {
+        status: "INSUFFICIENT_DATA",
+        changePercentagePoints: null,
+      };
+      const presentation = getTrendPresentation(trend.status);
+
+      const container = document.createElement("div");
+      container.className = "slot-trend";
+
+      const badge = document.createElement("span");
+      badge.className =
+        `slot-trend-badge ${presentation.className}`;
+      badge.textContent =
+        `${presentation.symbol} ${presentation.label}`;
+
+      const comparison = document.createElement("span");
+      comparison.className = "slot-trend-comparison mono";
+      comparison.textContent = createTrendComparisonText(
+        trend,
+        capacity.previousPeriod,
+      );
+
+      container.append(badge, comparison);
+      return container;
+    }
+    function getTrendPresentation(status) {
+      const presentations = {
+        GROWING: {
+          className: "growing",
+          symbol: "↑",
+          label: "Increasing",
+        },
+        STABLE: {
+          className: "stable",
+          symbol: "→",
+          label: "Stable",
+        },
+        DECLINING: {
+          className: "declining",
+          symbol: "↓",
+          label: "Declining",
+        },
+        INSUFFICIENT_DATA: {
+          className: "insufficient",
+          symbol: "—",
+          label: "No trend yet",
+        },
+      };
+
+      return (
+        presentations[status] ||
+        presentations.INSUFFICIENT_DATA
+      );
+    }
+    function createTrendComparisonText(trend, previousPeriod) {
+      if (trend.changePercentagePoints == null) {
+        return "No prior slot record found for comparison";
+      }
+
+      const comparisonPeriod =
+        previousPeriod || "the prior slot record";
+
+      return (
+        `${formatSignedPercentagePoints(
+          trend.changePercentagePoints,
+        )} vs ${comparisonPeriod}`
+      );
+    }
+    function formatSignedPercentagePoints(value) {
+      const numericValue = Number(value);
+      const sign = numericValue > 0 ? "+" : "";
+      const formattedValue = new Intl.NumberFormat("en-PH", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(numericValue);
+
+      return `${sign}${formattedValue} pp`;
+    }
+    function createCapacityProgress(capacity) {
+      const utilization = Number(capacity.utilization) || 0;
+      const progressTrack = document.createElement("div");
+      progressTrack.className = "slot-progress-track";
+      progressTrack.setAttribute("role", "progressbar");
+      progressTrack.setAttribute("aria-valuemin", "0");
+      progressTrack.setAttribute(
+        "aria-valuemax",
+        String(Math.max(100, utilization)),
+      );
+      progressTrack.setAttribute("aria-valuenow", String(utilization));
+      progressTrack.setAttribute(
+        "aria-valuetext",
+        `${formatPercent(utilization)} utilized`,
+      );
+
+      const progressFill = document.createElement("div");
+      progressFill.className = "slot-progress-fill";
+      progressFill.style.width =
+        `${Math.min(Math.max(utilization, 0), 100)}%`;
+      progressFill.classList.toggle(
+        "over-capacity",
+        capacity.aboveAllocation > 0,
+      );
+      progressTrack.appendChild(progressFill);
+
+      return progressTrack;
+    }
+    function createCapacityStatistics(capacity) {
+      const statistics = document.createElement("div");
+      statistics.className = "slot-stat-grid";
+      const isAboveAllocation = capacity.aboveAllocation > 0;
+
+      statistics.append(
+        createSlotStatistic("Allocated", capacity.allocated),
+        createSlotStatistic("Used", capacity.used),
+        createSlotStatistic(
+          isAboveAllocation ? "Above allocation" : "Idle",
+          isAboveAllocation ? capacity.aboveAllocation : capacity.idle,
+        ),
+      );
+
+      return statistics;
+    }
+    function createSlotStatistic(label, value) {
+      const statistic = document.createElement("div");
+      statistic.className = "slot-stat";
+      const valueElement = document.createElement("strong");
+      valueElement.className = "mono";
+      valueElement.textContent = formatSlotCount(value);
+      const labelElement = document.createElement("span");
+      labelElement.textContent = label;
+      statistic.append(valueElement, labelElement);
+      return statistic;
+    }
+    function formatSlotCount(value) {
+      if (value == null) {
+        return "—";
+      }
+
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 1,
+      }).format(Number(value));
+    }

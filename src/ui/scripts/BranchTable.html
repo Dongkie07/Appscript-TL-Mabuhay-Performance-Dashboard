@@ -1,0 +1,159 @@
+    function renderBranchPerformanceTable() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const searchQuery = getElementById("branchSearch")
+        .value.trim()
+        .toLowerCase();
+      const matchingBranches = dashboardState.data.branches.filter((branch) =>
+        branchMatchesSearch(branch, searchQuery),
+      );
+      const tableBody = getElementById("branchTableBody");
+
+      tableBody.replaceChildren();
+
+      matchingBranches.forEach((branch) => {
+        tableBody.appendChild(createBranchTableRow(branch));
+      });
+
+      updateBranchTableCount(matchingBranches.length);
+    }
+    function branchMatchesSearch(branch, searchQuery) {
+      if (!searchQuery) {
+        return true;
+      }
+
+      const normalizedBranchName = branch.branchName.toLowerCase();
+      const normalizedRegion = branch.region.toLowerCase();
+
+      return (
+        normalizedBranchName.includes(searchQuery) ||
+        normalizedRegion.includes(searchQuery)
+      );
+    }
+    function createBranchTableRow(branch) {
+      const tableRow = document.createElement("tr");
+
+      tableRow.appendChild(createBranchCell(branch));
+      tableRow.appendChild(createNumberCell(formatCurrency(branch.sales)));
+      tableRow.appendChild(
+        createNumberCell(
+          branch.target > 0 ? formatCurrency(branch.target) : "—",
+        ),
+      );
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.targetAchievement, "achievement"),
+      );
+      tableRow.appendChild(createNumberCell(formatCount(branch.transactions)));
+      tableRow.appendChild(
+        createNumberCell(formatCurrency(branch.averageTicket)),
+      );
+      tableRow.appendChild(createNumberCell(formatCurrency(branch.expenses)));
+      tableRow.appendChild(createBranchResultCell(branch));
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.tdcUtilization, "utilization"),
+      );
+      tableRow.appendChild(
+        createMetricBadgeCell(branch.pdcUtilization, "utilization"),
+      );
+
+      return tableRow;
+    }
+    function createBranchResultCell(branch) {
+      const resultCell = createNumberCell(
+        formatCurrency(branch.salesLessDisbursements),
+      );
+      const resultClass =
+        branch.salesLessDisbursements >= 0 ? "positive" : "negative-text";
+
+      resultCell.classList.add(resultClass);
+
+      return resultCell;
+    }
+    function updateBranchTableCount(visibleBranchCount) {
+      const totalBranchCount = dashboardState.data.branches.length;
+
+      getElementById("tableCount").textContent =
+        `${visibleBranchCount} of ${totalBranchCount} branches shown`;
+    }
+    function createBranchCell(branch) {
+      const cell = document.createElement("td");
+      cell.className = "branch-cell";
+
+      const button = document.createElement("button");
+      button.className = "branch-link";
+      button.type = "button";
+      button.dataset.branchKey = branch.branchKey;
+      button.setAttribute(
+        "aria-label",
+        `View slot utilization for ${branch.branchName}`,
+      );
+
+      const label = document.createElement("span");
+      label.className = "branch-link-label";
+      const strong = document.createElement("strong");
+      strong.textContent = branch.branchName;
+      const span = document.createElement("span");
+      span.textContent = branch.region;
+      label.append(strong, span);
+
+      const arrow = document.createElement("span");
+      arrow.className = "branch-link-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+
+      button.append(label, arrow);
+      cell.appendChild(button);
+
+      return cell;
+    }
+    function createNumberCell(value) {
+      const cell = document.createElement("td");
+      cell.className = "number mono";
+      cell.textContent = value;
+      return cell;
+    }
+    function createMetricBadgeCell(value, type) {
+      const cell = document.createElement("td");
+      cell.className = "number";
+      cell.appendChild(createMetricBadge(value, type));
+
+      return cell;
+    }
+    function createMetricBadge(value, type) {
+      const badge = document.createElement("span");
+      badge.className = "metric-badge mono";
+
+      if (value == null) {
+        badge.textContent = "—";
+      } else {
+        badge.textContent = formatPercent(value);
+        badge.classList.add(getMetricBadgeClass(value, type));
+      }
+
+      return badge;
+    }
+    function getMetricBadgeClass(value, type) {
+      if (type === "achievement") {
+        if (value >= 100) {
+          return "good";
+        }
+
+        if (value >= 80) {
+          return "warn";
+        }
+
+        return "bad";
+      }
+
+      if (value >= 70) {
+        return "good";
+      }
+
+      if (value >= 35) {
+        return "warn";
+      }
+
+      return "bad";
+    }

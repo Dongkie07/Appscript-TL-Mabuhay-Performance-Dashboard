@@ -1,0 +1,512 @@
+    function renderCapacityMetric(prefix, value) {
+      const boundedUtilization =
+        value == null ? 0 : Math.max(0, Math.min(100, value));
+
+      getElementById(`${prefix}Ring`).style.setProperty(
+        "--pct",
+        boundedUtilization,
+      );
+      getElementById(`${prefix}Value`).textContent =
+        value == null ? "No data" : formatPercent(value);
+    }
+    function renderCapacityTrend(prefix, trend, coverage) {
+      const safeTrend = trend || {
+        status: "INSUFFICIENT_DATA",
+        changePercentagePoints: null,
+      };
+      const presentation = getTrendPresentation(safeTrend.status);
+      const badge = getElementById(`${prefix}TrendBadge`);
+      const detail = getElementById(`${prefix}TrendDetail`);
+      const label =
+        safeTrend.status === "GROWING"
+          ? "Increasing"
+          : presentation.label;
+
+      badge.className =
+        `capacity-trend-badge ${presentation.className}`;
+      badge.textContent = `${presentation.symbol} ${label}`;
+
+      detail.textContent =
+        safeTrend.changePercentagePoints == null
+          ? "No prior slot record found for comparison"
+          : `${formatSignedPercentagePoints(
+              safeTrend.changePercentagePoints,
+            )} vs prior slot record · ${formatCount(
+              coverage.comparableBranches,
+            )} branches compared`;
+    }
+    function renderSlotUtilizationView() {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const courseCode = dashboardState.slotCourse.toUpperCase();
+      const dashboardData = dashboardState.data;
+      const selectedRange = dashboardData.filtersApplied;
+      const isAllAvailable =
+        selectedRange.startDate === dashboardData.availableDateRange.min &&
+        selectedRange.endDate === dashboardData.availableDateRange.max;
+
+      getElementById("slotCourseTitle").textContent =
+        `${courseCode} Slot Utilization`;
+      getElementById("slotSelectionRange").textContent =
+        `${isAllAvailable ? "All available · " : ""}` +
+        `${formatFriendlyDate(selectedRange.startDate)} – ` +
+        `${formatFriendlyDate(selectedRange.endDate)}`;
+      getElementById("slotSelectionExplanation").textContent =
+        isAllAvailable
+          ? `All available data is selected. Current status uses each branch’s latest ${courseCode} slot record; the selected-period average uses every usable weekly record.`
+          : `Current status uses each branch’s latest available ${courseCode} slot record inside the selected dates; the selected-period average uses all usable weekly records in those dates.`;
+
+      if (!dashboardState.slotData) {
+        if (!dashboardState.slotLoading) {
+          ensureSlotUtilizationData();
+        }
+        return;
+      }
+
+      const courseData = getSelectedCapacityCourse();
+
+      if (!courseData) {
+        renderEmptySlotUtilizationView(courseCode);
+        return;
+      }
+
+      renderSlotSummary(courseData);
+      renderSlotUtilizationRows();
+    }
+    function getSelectedCapacityCourse() {
+      const capacity =
+        dashboardState.slotData && dashboardState.slotData.capacity;
+
+      return capacity
+        ? capacity[dashboardState.slotCourse]
+        : null;
+    }
+    function renderEmptySlotUtilizationView(courseCode) {
+      getElementById("slotLatestUtilization").textContent = "—";
+      getElementById("slotUsedOfAllocated").textContent = "—";
+      getElementById("slotIdleSlots").textContent = "—";
+      getElementById("slotPeriodAverage").textContent = "—";
+      getElementById("slotComparableBranches").textContent = "—";
+      getElementById("slotComparableBasis").textContent =
+        "No usable branch comparison";
+      setSlotDataQualityPanelState(
+        "—",
+        `No ${courseCode} branch coverage was found in this selection.`,
+      );
+      getElementById("slotPeriodReports").textContent =
+        "No usable weekly records";
+      getElementById("slotLatestBasis").textContent =
+        "No reporting branches";
+      getElementById("slotHeroFootnote").textContent =
+        `No ${courseCode} slot allocation data was found in this selection.`;
+      getElementById("slotMovementSummary").textContent = "";
+      getElementById("slotSystemProgressFill").style.width = "0%";
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        "0",
+      );
+      getElementById("slotUtilizationRows").innerHTML =
+        '<div class="slot-ledger-empty">No slot records match the selected dates and filters.</div>';
+      getElementById("slotBranchCount").textContent =
+        "0 branches";
+    }
+    function renderSlotSummary(courseData) {
+      const summary = courseData.summary;
+      const latest = summary.latest;
+      const periodAverage = summary.periodAverage;
+      const coverage = summary.coverage;
+      const counts = summary.movementCounts;
+      const currentUtilization = latest.utilization;
+      const boundedUtilization =
+        currentUtilization == null
+          ? 0
+          : Math.max(0, Math.min(100, currentUtilization));
+
+      getElementById("slotLatestUtilization").textContent =
+        currentUtilization == null
+          ? "—"
+          : formatPercent(currentUtilization);
+      getElementById("slotUsedOfAllocated").textContent =
+        latest.allocated > 0
+          ? `${formatCount(latest.used)} of ${formatCount(
+              latest.allocated,
+            )}`
+          : "—";
+      getElementById("slotIdleSlots").textContent =
+        latest.allocated > 0
+          ? formatCount(latest.idle)
+          : "—";
+      getElementById("slotPeriodAverage").textContent =
+        periodAverage.utilization == null
+          ? "—"
+          : formatPercent(periodAverage.utilization);
+      getElementById("slotComparableBranches").textContent =
+        `${formatCount(
+          coverage.comparableBranches,
+        )} of ${formatCount(
+          coverage.branchesWithUtilization,
+        )}`;
+      const officialBranchCount =
+        coverage.officialBranches || courseData.branches.length;
+      getElementById("slotComparableBasis").textContent =
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} usable branches · ${formatCount(
+          officialBranchCount,
+        )} official total`;
+
+      getElementById("slotLatestBasis").textContent =
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} of ${formatCount(
+          officialBranchCount,
+        )} official branches have usable utilization`;
+      getElementById("slotPeriodReports").textContent =
+        `${formatCount(
+          periodAverage.reports,
+        )} weekly branch records in the selection`;
+      getElementById("slotSystemProgressFill").style.width =
+        `${boundedUtilization}%`;
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        String(boundedUtilization),
+      );
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuetext",
+        currentUtilization == null
+          ? "No current utilization"
+          : `${formatPercent(currentUtilization)} utilized`,
+      );
+      getElementById("slotHeroFootnote").textContent =
+        `${formatCount(latest.idle)} current slots are unused across ` +
+        `${formatCount(
+          coverage.branchesWithUtilization,
+        )} reporting branches.`;
+      getElementById("slotMovementSummary").textContent =
+        `↑ ${formatCount(counts.growing)} increasing · ` +
+        `→ ${formatCount(counts.stable)} stable · ` +
+        `↓ ${formatCount(counts.declining)} declining`;
+
+      renderSlotDataQuality(courseData);
+    }
+    function renderSlotDataQuality(courseData) {
+      const summary = courseData.summary || {};
+      const coverage = summary.coverage || {};
+      const branches = courseData.branches || [];
+      const officialBranches =
+        coverage.officialBranches != null
+          ? coverage.officialBranches
+          : branches.length;
+      const usableBranches =
+        coverage.branchesWithUtilization != null
+          ? coverage.branchesWithUtilization
+          : branches.filter(
+              (branch) => branch.latest.utilization != null,
+            ).length;
+      const noDataBranches =
+        coverage.branchesWithoutUsableUtilization != null
+          ? coverage.branchesWithoutUsableUtilization
+          : Math.max(officialBranches - usableBranches, 0);
+      const behindBranches =
+        coverage.branchesBehindLatest != null
+          ? coverage.branchesBehindLatest
+          : branches.filter((branch) => {
+              const freshness = getSlotFreshness(branch);
+              return (
+                freshness.status === "BEHIND" ||
+                freshness.status === "STALE"
+              );
+            }).length;
+      const staleBranches =
+        coverage.staleBranches != null
+          ? coverage.staleBranches
+          : branches.filter(
+              (branch) =>
+                getSlotFreshness(branch).status === "STALE",
+            ).length;
+      const latestReportingPeriod =
+        summary.latestReportingPeriod &&
+        summary.latestReportingPeriod.periodLabel
+          ? summary.latestReportingPeriod.periodLabel
+          : "—";
+
+      getElementById("slotOfficialBranches").textContent =
+        formatCount(officialBranches);
+      getElementById("slotUsableBranches").textContent =
+        `${formatCount(usableBranches)} of ${formatCount(
+          officialBranches,
+        )}`;
+      getElementById("slotNoDataBranches").textContent =
+        formatCount(noDataBranches);
+      getElementById("slotBehindBranches").textContent =
+        formatCount(behindBranches);
+      getElementById("slotLatestReportingPeriod").textContent =
+        `Latest reporting week: ${latestReportingPeriod}`;
+      getElementById("slotDataQualitySubtitle").textContent =
+        `${courseData.courseCode}: ${formatCount(
+          usableBranches,
+        )} of ${formatCount(
+          officialBranches,
+        )} official branches have a usable utilization percentage.`;
+
+      if (behindBranches === 0) {
+        getElementById("slotBehindBranchesHelp").textContent =
+          "All recorded branches are on the latest reporting week";
+      } else if (staleBranches === 0) {
+        getElementById("slotBehindBranchesHelp").textContent =
+          `${formatCount(
+            behindBranches,
+          )} branch record(s) are one week behind`;
+      } else {
+        getElementById("slotBehindBranchesHelp").textContent =
+          `${formatCount(
+            staleBranches,
+          )} stale by 2+ weeks; ${formatCount(
+            behindBranches - staleBranches,
+          )} one week behind`;
+      }
+
+      renderSlotValidationList(courseData);
+    }
+    function renderSlotValidationList(courseData) {
+      const host = getElementById("slotValidationRows");
+      const branches = courseData.branches || [];
+      const reviewBranches = branches.filter((branch) => {
+        const freshness = getSlotFreshness(branch);
+
+        return (
+          branch.latest.utilization == null ||
+          freshness.status === "BEHIND" ||
+          freshness.status === "STALE"
+        );
+      });
+
+      reviewBranches.sort((firstBranch, secondBranch) => {
+        const firstNoData =
+          firstBranch.latest.utilization == null ? 0 : 1;
+        const secondNoData =
+          secondBranch.latest.utilization == null ? 0 : 1;
+
+        if (firstNoData !== secondNoData) {
+          return firstNoData - secondNoData;
+        }
+
+        const firstLag =
+          getSlotFreshness(firstBranch).lagWeeks || 0;
+        const secondLag =
+          getSlotFreshness(secondBranch).lagWeeks || 0;
+
+        if (firstLag !== secondLag) {
+          return secondLag - firstLag;
+        }
+
+        return firstBranch.branchName.localeCompare(
+          secondBranch.branchName,
+        );
+      });
+
+      host.replaceChildren(
+        ...reviewBranches.map(createSlotValidationRow),
+      );
+
+      const noDataCount = reviewBranches.filter(
+        (branch) => branch.latest.utilization == null,
+      ).length;
+      const behindCount = reviewBranches.filter((branch) => {
+        const status = getSlotFreshness(branch).status;
+        return status === "BEHIND" || status === "STALE";
+      }).length;
+
+      getElementById("slotValidationSummary").textContent =
+        reviewBranches.length
+          ? `${formatCount(
+              reviewBranches.length,
+            )} branch(es) need review · ${formatCount(
+              noDataCount,
+            )} no usable percentage · ${formatCount(
+              behindCount,
+            )} behind the latest week`
+          : "No source-data issues were detected for this selection.";
+
+      if (!reviewBranches.length) {
+        const emptyState = document.createElement("div");
+        emptyState.className = "slot-validation-empty";
+        emptyState.textContent =
+          "All branches have usable current records for this selection.";
+        host.appendChild(emptyState);
+      }
+    }
+    function createSlotValidationRow(branch) {
+      const row = document.createElement("div");
+      const dataQuality = getSlotDataQuality(branch);
+      const freshness = getSlotFreshness(branch);
+      const hasNoData = branch.latest.utilization == null;
+      const issueParts = [];
+      const actionParts = [];
+
+      row.className = "slot-validation-row";
+
+      if (hasNoData) {
+        issueParts.push(dataQuality.label);
+        actionParts.push(dataQuality.action);
+      }
+
+      if (
+        freshness.status === "BEHIND" ||
+        freshness.status === "STALE"
+      ) {
+        issueParts.push(freshness.label);
+        actionParts.push(
+          "Confirm that the latest weekly record was encoded",
+        );
+      }
+
+      row.append(
+        createSlotValidationCell(
+          "Branch",
+          branch.branchName,
+          branch.region,
+          "branch",
+        ),
+        createSlotValidationCell(
+          "Issue",
+          issueParts.join(" · ") || "Review required",
+          "",
+          hasNoData ? "issue" : "stale",
+        ),
+        createSlotValidationCell(
+          "Latest record",
+          branch.latest.periodLabel || "No record",
+          "",
+          "period",
+        ),
+        createSlotValidationCell(
+          "Recommended action",
+          actionParts.join(" · ") ||
+            "Verify the latest source record",
+          "",
+          "action",
+        ),
+      );
+
+      return row;
+    }
+    function createSlotValidationCell(
+      label,
+      primaryText,
+      secondaryText,
+      className,
+    ) {
+      const cell = document.createElement("span");
+      const primary = document.createElement("strong");
+
+      cell.className = `slot-validation-cell ${className || ""}`;
+      cell.dataset.label = label;
+      primary.textContent = primaryText;
+      cell.appendChild(primary);
+
+      if (secondaryText) {
+        const secondary = document.createElement("small");
+        secondary.textContent = secondaryText;
+        cell.appendChild(secondary);
+      }
+
+      return cell;
+    }
+    function getSlotDataQuality(branch) {
+      if (branch && branch.dataQuality) {
+        return branch.dataQuality;
+      }
+
+      const latest = branch && branch.latest
+        ? branch.latest
+        : {};
+      const allocated = latest.allocated;
+      const used = latest.used;
+      const hasRecord = Boolean(
+        latest.periodKey != null ||
+        latest.periodLabel ||
+        allocated != null ||
+        used != null,
+      );
+
+      if (!hasRecord) {
+        return {
+          code: "NO_RECORD",
+          label: "No slot record found",
+          action: "Verify the branch record in the source Sheet",
+        };
+      }
+
+      if (allocated == null && used != null) {
+        return {
+          code: "MISSING_ALLOCATION",
+          label: "Usage encoded, but allocation is missing",
+          action: "Encode the weekly allocation",
+        };
+      }
+
+      if (allocated === 0 && used != null && used > 0) {
+        return {
+          code: "ZERO_ALLOCATION_WITH_USAGE",
+          label: "Usage encoded, but allocation is zero",
+          action: "Correct the allocation before using the percentage",
+        };
+      }
+
+      if (allocated === 0) {
+        return {
+          code: "ZERO_ALLOCATION",
+          label: "Weekly allocation is zero",
+          action: "Confirm or encode the weekly allocation",
+        };
+      }
+
+      if (allocated > 0 && used == null) {
+        return {
+          code: "MISSING_USAGE",
+          label: "Allocation encoded, but usage is missing",
+          action: "Encode used slots or confirm a recorded zero",
+        };
+      }
+
+      return {
+        code: latest.utilization == null
+          ? "NO_USABLE_PERCENTAGE"
+          : "OK",
+        label: latest.utilization == null
+          ? "No usable utilization percentage"
+          : "Usable utilization record",
+        action: latest.utilization == null
+          ? "Check the allocation and usage values"
+          : "No data correction required",
+      };
+    }
+    function getSlotFreshness(branch) {
+      if (branch && branch.freshness) {
+        return branch.freshness;
+      }
+
+      return {
+        status:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? "CURRENT"
+            : "NO_RECORD",
+        lagWeeks:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? 0
+            : null,
+        label:
+          branch &&
+          branch.latest &&
+          branch.latest.periodKey != null
+            ? "Current"
+            : "No record",
+      };
+    }

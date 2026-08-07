@@ -1,0 +1,153 @@
+    function renderMonthlySales(supportData) {
+      const kpis = supportData.kpis || {};
+      const branches = supportData.branches || [];
+      const suppliedRegions = supportData.regions || [];
+      const regionMap = Object.create(null);
+
+      setText(
+        "monthlyOfficialCollections",
+        formatCurrency(kpis.officialActualCollections),
+      );
+      setText("monthlySalesTarget", formatCurrency(kpis.target));
+      setText(
+        "monthlyAverageAchievement",
+        kpis.targetAchievement == null
+          ? "—"
+          : formatPercentPrecise(kpis.targetAchievement),
+      );
+      setText(
+        "monthlyAchievementNote",
+        `${formatNumber(
+          kpis.branchAchievementCount || 0,
+        )} branches in the selected scope`,
+      );
+
+      suppliedRegions.forEach((regionSummary) => {
+        const region = regionSummary.region || "Unspecified";
+
+        regionMap[region] = {
+          region,
+          branches: [],
+          actual: Number(regionSummary.actualCollections ?? regionSummary.sales) || 0,
+          target: Number(regionSummary.target) || 0,
+          targetAchievement:
+            regionSummary.targetAchievement == null
+              ? null
+              : Number(regionSummary.targetAchievement),
+        };
+      });
+
+      branches.forEach((branch) => {
+        const region = branch.region || "Unspecified";
+
+        if (!regionMap[region]) {
+          regionMap[region] = {
+            region,
+            branches: [],
+            actual: 0,
+            target: 0,
+            targetAchievement: null,
+          };
+        }
+
+        regionMap[region].branches.push(branch);
+      });
+
+      const groups = Object.values(regionMap)
+        .filter((group) => group.branches.length || group.actual || group.target)
+        .sort(compareMonthlyRegionPerformance);
+
+      const host = document.getElementById("monthlyRegionGroups");
+
+      if (!host) return;
+
+      if (!groups.length) {
+        host.innerHTML =
+          '<div class="empty-chart">No monthly branch data for this selection.</div>';
+        return;
+      }
+
+      host.innerHTML = groups
+        .map((group, index) => {
+          const branchRows = group.branches
+            .sort(
+              (first, second) =>
+                (Number(second.officialActualCollections) || 0) -
+                  (Number(first.officialActualCollections) || 0) ||
+                String(first.branchName || "").localeCompare(
+                  String(second.branchName || ""),
+                ),
+            )
+            .map(
+              (branch) => `
+                <tr>
+                  <td>${escapeHtml(branch.branchName)}</td>
+                  <td>${escapeHtml(
+                    formatCurrency(branch.officialActualCollections),
+                  )}</td>
+                  <td>${escapeHtml(formatCurrency(branch.target))}</td>
+                  <td>${
+                    branch.targetAchievement == null
+                      ? "—"
+                      : escapeHtml(
+                          formatPercentPrecise(branch.targetAchievement),
+                        )
+                  }</td>
+                </tr>
+              `,
+            )
+            .join("");
+
+          return `
+            <details class="executive-region-card" ${index === 0 ? "open" : ""}>
+              <summary>
+                <strong>${escapeHtml(group.region)}</strong>
+                <span>${escapeHtml(formatCurrency(group.actual))}</span>
+                <span>${escapeHtml(formatCurrency(group.target))}</span>
+                <span>${
+                  group.targetAchievement == null
+                    ? "—"
+                    : escapeHtml(
+                        formatPercentPrecise(group.targetAchievement),
+                      )
+                }</span>
+              </summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Branch</th>
+                    <th>Sales</th>
+                    <th>Monthly target</th>
+                    <th>Achievement</th>
+                  </tr>
+                </thead>
+                <tbody>${branchRows}</tbody>
+              </table>
+            </details>
+          `;
+        })
+        .join("");
+    }
+    function compareMonthlyRegionPerformance(first, second) {
+      const firstAchievement =
+        first.targetAchievement == null
+          ? Number.NEGATIVE_INFINITY
+          : Number(first.targetAchievement);
+      const secondAchievement =
+        second.targetAchievement == null
+          ? Number.NEGATIVE_INFINITY
+          : Number(second.targetAchievement);
+
+      if (secondAchievement !== firstAchievement) {
+        return secondAchievement - firstAchievement;
+      }
+
+      return compareRegions(first, second);
+    }
+    function compareRegions(first, second) {
+      if (first.region === "NIR") return -1;
+      if (second.region === "NIR") return 1;
+      const firstNumber = Number((first.region.match(/\d+/) || [999])[0]);
+      const secondNumber = Number((second.region.match(/\d+/) || [999])[0]);
+      return firstNumber - secondNumber || first.region.localeCompare(second.region);
+    }

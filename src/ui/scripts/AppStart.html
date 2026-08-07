@@ -1,0 +1,28 @@
+<script>
+  (() => {
+    "use strict";
+
+    const CHART_COLORS = [
+      "#0b1f3a",
+      "#c79224",
+      "#2c5d8a",
+      "#e4b84e",
+      "#6f7d90",
+      "#9b7530",
+      "#c8ad68",
+    ];
+
+    const dashboardState = {
+      data: null,
+      loading: false,
+      localPreview: false,
+      lastFocusedBranchButton: null,
+      activeView: "overviewView",
+      slotCourse: "tdc",
+      slotData: null,
+      slotLoading: false,
+      slotRequestKey: "",
+      slotPrefetchTimer: null,
+      pendingBranchKey: "ALL",
+      renderVersion: 0,
+    };

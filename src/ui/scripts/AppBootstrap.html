@@ -1,0 +1,311 @@
+    function getElementById(elementId) {
+      return document.getElementById(elementId);
+    }
+
+    document.addEventListener("DOMContentLoaded", initializeDashboard);
+    function initializeDashboard() {
+      registerEventListeners();
+      requestDashboardData({});
+    }
+    function registerEventListeners() {
+      getElementById("applyButton").addEventListener(
+        "click",
+        handleApplyFiltersClick,
+      );
+      getElementById("refreshButton").addEventListener(
+        "click",
+        handleRefreshClick,
+      );
+      getElementById("regionFilter").addEventListener(
+        "change",
+        handleRegionFilterChange,
+      );
+      getElementById("branchFilter").addEventListener(
+        "input",
+        rememberBranchSelection,
+      );
+      getElementById("branchFilter").addEventListener(
+        "change",
+        rememberBranchSelection,
+      );
+      getElementById("branchSearch").addEventListener(
+        "input",
+        renderBranchPerformanceTable,
+      );
+      getElementById("branchTableBody").addEventListener(
+        "click",
+        handleBranchTableClick,
+      );
+      getElementById("closeSlotDialogButton").addEventListener(
+        "click",
+        closeBranchUtilizationDialog,
+      );
+      getElementById("branchUtilizationDialog").addEventListener(
+        "click",
+        handleSlotDialogBackdropClick,
+      );
+      getElementById("branchUtilizationDialog").addEventListener(
+        "close",
+        restoreBranchButtonFocus,
+      );
+      getElementById("slotSort").addEventListener(
+        "change",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotLevelFilter").addEventListener(
+        "change",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotBranchSearch").addEventListener(
+        "input",
+        renderSlotUtilizationRows,
+      );
+      getElementById("slotUtilizationRows").addEventListener(
+        "click",
+        handleSlotLedgerClick,
+      );
+
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", handleDatePresetClick);
+      });
+      document.querySelectorAll("[data-dashboard-view]").forEach((button) => {
+        button.addEventListener("click", handleDashboardViewClick);
+      });
+      document.querySelectorAll("[data-slot-course]").forEach((button) => {
+        button.addEventListener("click", handleSlotCourseClick);
+      });
+    }
+    function handleApplyFiltersClick() {
+      invalidateSlotData();
+      requestDashboardData(readSelectedFilters());
+    }
+    function handleRefreshClick() {
+      const selectedFilters = readSelectedFilters();
+
+      invalidateSlotData();
+      selectedFilters.forceRefresh = true;
+      requestDashboardData(selectedFilters);
+    }
+    function handleRegionFilterChange() {
+      dashboardState.pendingBranchKey = "ALL";
+      updateBranchOptions("ALL");
+    }
+    function rememberBranchSelection(event) {
+      dashboardState.pendingBranchKey =
+        event.currentTarget.value || "ALL";
+    }
+    function handleDatePresetClick(event) {
+      const selectedPreset = event.currentTarget.dataset.preset;
+
+      applyDatePreset(selectedPreset);
+    }
+    function requestDashboardData(selectedFilters, useSilentRefresh) {
+      if (dashboardState.loading) {
+        return;
+      }
+
+      dashboardState.loading = true;
+      updateErrorBanner("");
+
+      if (!useSilentRefresh) {
+        setLoadingState(true);
+      }
+
+      if (isAppsScriptRuntime()) {
+        google.script.run
+          .withSuccessHandler(handleDashboardDataSuccess)
+          .withFailureHandler(handleDashboardDataFailure)
+          .getDashboardData(selectedFilters || {});
+
+        return;
+      }
+
+      loadLocalPreview();
+    }
+    function isAppsScriptRuntime() {
+      return Boolean(
+        window.google &&
+          google.script &&
+          google.script.run &&
+          typeof google.script.run.withSuccessHandler === "function",
+      );
+    }
+    function loadLocalPreview() {
+      dashboardState.localPreview = true;
+      window.setTimeout(finishLoadingLocalPreview, 250);
+    }
+    function finishLoadingLocalPreview() {
+      handleDashboardDataSuccess(buildPreviewData());
+    }
+    function handleDashboardDataSuccess(dashboardData) {
+      if (isAppsScriptRuntime()) {
+        dashboardState.localPreview = false;
+      }
+
+      dashboardState.data = dashboardData;
+      dashboardState.loading = false;
+      updateFilterControls();
+      renderDashboardView();
+    }
+    function handleDashboardDataFailure(error) {
+      const errorMessage = getErrorMessage(error);
+
+      dashboardState.loading = false;
+      setLoadingState(false);
+      updateErrorBanner(
+        errorMessage ||
+          "The dashboard could not read the Sheet. Confirm the tab names and deployment access.",
+      );
+    }
+    function getErrorMessage(error) {
+      if (!error) {
+        return "";
+      }
+
+      if (error.message) {
+        return error.message;
+      }
+
+      return String(error);
+    }
+    function setLoadingState(isLoading) {
+      getElementById("loadingCover").classList.toggle("hidden", !isLoading);
+      getElementById("dashboard").setAttribute(
+        "aria-busy",
+        isLoading ? "true" : "false",
+      );
+      getElementById("refreshButton").disabled = isLoading;
+      getElementById("applyButton").disabled = isLoading;
+    }
+    function updateErrorBanner(message) {
+      const errorBanner = getElementById("errorBanner");
+
+      errorBanner.textContent = message;
+      errorBanner.classList.toggle("hidden", !message);
+    }
+    function readSelectedFilters() {
+      const branchSelect = getElementById("branchFilter");
+      const selectedBranch =
+        branchSelect.value || dashboardState.pendingBranchKey || "ALL";
+
+      dashboardState.pendingBranchKey = selectedBranch;
+
+      return {
+        startDate: getElementById("startDate").value,
+        endDate: getElementById("endDate").value,
+        region: getElementById("regionFilter").value,
+        branch: selectedBranch,
+      };
+    }
+    function updateFilterControls() {
+      const dashboardData = dashboardState.data;
+      const selectedRegion = dashboardData.filtersApplied.region || "ALL";
+      const selectedBranch = dashboardData.filtersApplied.branch || "ALL";
+
+      updateDateInputs(dashboardData);
+      updateRegionOptions(dashboardData, selectedRegion);
+      updateBranchOptions(selectedBranch);
+      updateAvailableDateCaption(dashboardData);
+    }
+    function updateDateInputs(dashboardData) {
+      const startDateInput = getElementById("startDate");
+      const endDateInput = getElementById("endDate");
+      const availableDates = dashboardData.availableDateRange;
+
+      startDateInput.min = availableDates.min;
+      startDateInput.max = availableDates.max;
+      startDateInput.value = dashboardData.filtersApplied.startDate;
+      endDateInput.min = availableDates.min;
+      endDateInput.max = availableDates.max;
+      endDateInput.value = dashboardData.filtersApplied.endDate;
+    }
+    function updateRegionOptions(dashboardData, selectedRegion) {
+      const regionSelect = getElementById("regionFilter");
+
+      regionSelect.replaceChildren(createOptionElement("ALL", "All regions"));
+      dashboardData.options.regions.forEach((region) => {
+        regionSelect.appendChild(createOptionElement(region, region));
+      });
+      regionSelect.value = selectedRegion;
+    }
+    function updateAvailableDateCaption(dashboardData) {
+      getElementById("dateCaption").textContent =
+        `Available: ${formatFriendlyDate(dashboardData.availableDateRange.min)} – ` +
+        `${formatFriendlyDate(dashboardData.availableDateRange.max)}`;
+    }
+    function updateBranchOptions(preferredValue) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const branchSelect = getElementById("branchFilter");
+      const status = getElementById("branchFilterStatus");
+      const selectedBranch =
+        typeof preferredValue === "string"
+          ? preferredValue
+          : dashboardState.pendingBranchKey || branchSelect.value || "ALL";
+      const selectedRegion = getElementById("regionFilter").value;
+      const matchingBranches = dashboardState.data.options.branches.filter(
+        (branch) =>
+          selectedRegion === "ALL" || branch.region === selectedRegion,
+      );
+
+      branchSelect.replaceChildren(createOptionElement("ALL", "All branches"));
+
+      matchingBranches.forEach((branch) => {
+        branchSelect.appendChild(
+          createOptionElement(branch.branchKey, branch.branchName),
+        );
+      });
+
+      const selectedBranchExists = Array.from(branchSelect.options).some(
+        (option) => option.value === selectedBranch,
+      );
+
+      branchSelect.value = selectedBranchExists ? selectedBranch : "ALL";
+      dashboardState.pendingBranchKey = branchSelect.value;
+      branchSelect.disabled = matchingBranches.length === 0;
+
+      if (status) {
+        status.textContent =
+          selectedRegion === "ALL"
+            ? `${formatCount(matchingBranches.length)} branches available. Choose a region to shorten the list.`
+            : `${formatCount(matchingBranches.length)} branches available in ${selectedRegion}.`;
+      }
+    }
+    function createOptionElement(value, label) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }
+    function applyDatePreset(preset) {
+      if (!dashboardState.data) {
+        return;
+      }
+
+      const availableDates = dashboardState.data.availableDateRange;
+      const maximumDate = parseIsoDate(availableDates.max);
+      const minimumDate = parseIsoDate(availableDates.min);
+      let selectedStartDate = new Date(maximumDate);
+
+      if (preset === "week") {
+        const daysSinceSunday = maximumDate.getDay();
+        selectedStartDate.setDate(
+          selectedStartDate.getDate() - daysSinceSunday,
+        );
+      } else if (preset === "2weeks") {
+        selectedStartDate.setDate(selectedStartDate.getDate() - 13);
+      } else {
+        selectedStartDate = minimumDate;
+      }
+
+      if (selectedStartDate < minimumDate) {
+        selectedStartDate = new Date(minimumDate);
+      }
+
+      getElementById("startDate").value = toIsoDate(selectedStartDate);
+      getElementById("endDate").value = toIsoDate(maximumDate);
+      invalidateSlotData();
+      requestDashboardData(readSelectedFilters());
+    }

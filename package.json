@@ -1,0 +1,21 @@
+{
+  "name": "tl-mabuhay-performance-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Google Apps Script dashboard for TL Mabuhay Driving School.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "gas:login": "clasp login",
+    "gas:pull": "clasp pull",
+    "gas:push": "npm run validate && clasp push",
+    "gas:open": "clasp open-script",
+    "gas:versions": "clasp versions"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.3.0"
+  }
+}

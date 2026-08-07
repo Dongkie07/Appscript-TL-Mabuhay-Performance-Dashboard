@@ -1,0 +1,27 @@
+<script>
+  (() => {
+    "use strict";
+
+    const executiveState = {
+      trendMode: "AUTO",
+      requestVersion: 0,
+      refreshTimer: null,
+      observer: null,
+      monthlyActive: false,
+      trendsActive: false,
+      latestSupport: null,
+      monthlyCache: Object.create(null),
+      monthlyRequestVersion: 0,
+      monthlyLoadingKey: "",
+      supportLoading: false,
+      loadedFilterKey: "",
+      inFlightFilterKey: "",
+      renderingSupport: false,
+      idleHandle: null,
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeExecutiveSales);
+    } else {
+      initializeExecutiveSales();
+    }
