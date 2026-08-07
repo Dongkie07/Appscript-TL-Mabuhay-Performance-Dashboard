@@ -33,11 +33,22 @@
 
       dashboardState.renderVersion = renderVersion;
 
+      if (typeof window.renderExecutiveSupport === "function" && dashboardData.executiveSales) {
+        window.renderExecutiveSupport(dashboardData.executiveSales);
+      }
+
+      if (window.executiveState?.monthlyActive && typeof window.showMonthlySalesView === "function") {
+        window.showMonthlySalesView(true);
+      } else if (window.executiveState?.trendsActive && typeof window.showSalesTrendsView === "function") {
+        window.showSalesTrendsView(true);
+      } else {
+        showDashboardView(dashboardState.activeView || dashboardState.currentView);
+      }
+
       renderConnectionStatus();
       renderKpiCards(dashboardData);
       renderCapacityCards(dashboardData);
       renderSourceMetadata(dashboardData);
-      showDashboardView(dashboardState.activeView);
       setLoadingState(false);
       scheduleSlotDataPrefetch();
 

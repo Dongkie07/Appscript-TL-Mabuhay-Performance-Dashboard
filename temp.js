@@ -140,7 +140,16 @@
       }
     }
 
+      const selectedMonth =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+      const endMonth = String(filters.endDate || "").slice(0, 7);
 
+      return Boolean(
+        /^\d{4}-\d{2}$/.test(selectedMonth) &&
+        selectedMonth === endMonth
+      );
+    }
 
     function buildSelectedMonthRequest(forceRefresh) {
       const value =

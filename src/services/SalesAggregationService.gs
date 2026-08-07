@@ -35,48 +35,72 @@ function aggregateSalesRows_(
       continue;
     }
 
-    const branchIdentity = resolveBranchIdentity_(
+    const sourceBranchIdentity = resolveBranchIdentity_(
       salesRow,
       salesSource.canonicalBranches
     );
-    if (
-      !matchesFilters_(
-        salesRow.date,
-        branchIdentity.region,
-        salesRow.branchKey,
-        filters
-      )
-    ) {
+    const collectionRow = {
+      branchKey: salesRow.collectionBranchKey,
+      branchName: salesRow.collectionBranchName || salesRow.branchName,
+      region: salesRow.collectionRegion || salesRow.region
+    };
+    const collectionBranchIdentity = resolveBranchIdentity_(
+      collectionRow,
+      salesSource.canonicalBranches
+    );
+
+    const matchSales = matchesFilters_(
+      salesRow.date,
+      collectionBranchIdentity.region,
+      salesRow.collectionBranchKey,
+      filters
+    );
+
+    const matchCapacity = matchesFilters_(
+      salesRow.date,
+      sourceBranchIdentity.region,
+      salesRow.branchKey,
+      filters
+    );
+
+    if (!matchSales && !matchCapacity) {
       continue;
     }
 
-    aggregation.salesRowsMatched += 1;
     aggregation.selectedMaxDate = latestDate_(
       aggregation.selectedMaxDate,
       salesRow.date
     );
-    addSalesToBranch_(
-      aggregation.branchTotals,
-      salesRow,
-      branchIdentity
-    );
-    addToMap_(
-      aggregation.serviceMix,
-      salesRow.serviceGroup,
-      salesRow.amount
-    );
-    addSalesToTrend_(
-      aggregation.salesTrend,
-      salesRow,
-      aggregation.trendBucketMode,
-      timezone
-    );
-    updateOverviewCapacity_(
-      aggregation.capacityOverview,
-      salesRow,
-      branchIdentity.branchName,
-      branchIdentity.region
-    );
+
+    if (matchSales) {
+      aggregation.salesRowsMatched += 1;
+      addSalesToBranch_(
+        aggregation.branchTotals,
+        salesRow.collectionBranchKey,
+        salesRow,
+        collectionBranchIdentity
+      );
+      addToMap_(
+        aggregation.serviceMix,
+        salesRow.serviceGroup,
+        salesRow.amount
+      );
+      addSalesToTrend_(
+        aggregation.salesTrend,
+        salesRow,
+        aggregation.trendBucketMode,
+        timezone
+      );
+    }
+
+    if (matchCapacity) {
+      updateOverviewCapacity_(
+        aggregation.capacityOverview,
+        salesRow,
+        sourceBranchIdentity.branchName,
+        sourceBranchIdentity.region
+      );
+    }
   }
 }
 
@@ -98,12 +122,13 @@ function resolveBranchIdentity_(row, canonicalBranches) {
 
 function addSalesToBranch_(
   branchTotals,
+  branchKey,
   salesRow,
   branchIdentity
 ) {
   const branchTotal = getBranchAggregate_(
     branchTotals,
-    salesRow.branchKey,
+    branchKey,
     branchIdentity.branchName,
     branchIdentity.region
   );

@@ -189,9 +189,10 @@ function executiveFinalizePivotAggregate_(aggregate) {
   }
 
   aggregate.target = target;
-  aggregate.achievement = aggregate.rowCount > 0
-    ? aggregate.achievementContribution * 100
-    : null;
+  aggregate.achievement = percentageOrNull_(
+    aggregate.actual,
+    aggregate.target
+  );
   aggregate.finalized = true;
   return aggregate;
 }

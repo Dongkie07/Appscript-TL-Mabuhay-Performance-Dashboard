@@ -97,6 +97,9 @@ function buildSlotSharingDataFromSources_(
       row.collectionBranchName || row.branchName
     );
     const borrowerKey = normalizeKey_(borrowerName);
+    
+    if (sourceKey && borrowerKey && sourceKey === borrowerKey) continue;
+
     const sourceRegion = row.region || 'Unspecified';
     const borrowerRegion = row.collectionRegion || sourceRegion;
     const sourceKnown = isKnownSlotSource_(sourceName);

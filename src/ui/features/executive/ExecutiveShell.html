@@ -5,12 +5,17 @@
       replaceOverviewTrendCard();
       addMonthlySalesView();
       addSalesTrendsView();
-      observeDashboardRefreshes();
-      /*
-       * The base dashboard performs the first server request. Executive data
-       * is requested only after that render changes the KPI, preventing two
-       * expensive Apps Script calls from racing during page startup.
-       */
+      
+      const refreshButton = document.getElementById("refreshButton");
+      if (refreshButton) {
+        refreshButton.addEventListener("click", () => {
+          executiveState.monthlyCache = Object.create(null);
+          executiveState.monthlyLoadingKey = "";
+          executiveState.monthlyRequestVersion += 1;
+          executiveState.loadedFilterKey = "";
+          executiveState.inFlightFilterKey = "";
+        });
+      }
     }
     function removeRegionalScorecard() {
       const regionalTab = document.getElementById("regionalTab");
@@ -131,116 +136,7 @@
       host.innerHTML =
         '<div class="empty-chart">Preparing sales for the selected range…</div>';
     }
-    function observeDashboardRefreshes() {
-      const salesValue = document.getElementById("kpiSales");
 
-      if (!salesValue || executiveState.observer) return;
-
-      executiveState.observer = new MutationObserver(() => {
-        if (executiveState.renderingSupport) return;
-
-        const filterKey = getExecutiveFilterKey(readExecutiveFilters());
-
-        if (
-          !filterKey ||
-          filterKey === executiveState.loadedFilterKey ||
-          filterKey === executiveState.inFlightFilterKey
-        ) {
-          return;
-        }
-
-        scheduleExecutiveRefresh(80);
-      });
-      executiveState.observer.observe(salesValue, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-
-      document.getElementById("refreshButton")?.addEventListener("click", () => {
-        executiveState.monthlyCache = Object.create(null);
-        executiveState.monthlyLoadingKey = "";
-        executiveState.monthlyRequestVersion += 1;
-        executiveState.loadedFilterKey = "";
-        executiveState.inFlightFilterKey = "";
-      });
-    }
-    function scheduleExecutiveRefresh(delay, urgent) {
-      window.clearTimeout(executiveState.refreshTimer);
-      executiveState.refreshTimer = null;
-
-      if (
-        executiveState.idleHandle !== null &&
-        typeof window.cancelIdleCallback === "function"
-      ) {
-        window.cancelIdleCallback(executiveState.idleHandle);
-      }
-      executiveState.idleHandle = null;
-
-      executiveState.refreshTimer = window.setTimeout(() => {
-        executiveState.refreshTimer = null;
-
-        if (
-          urgent !== true &&
-          typeof window.requestIdleCallback === "function"
-        ) {
-          executiveState.idleHandle = window.requestIdleCallback(
-            () => {
-              executiveState.idleHandle = null;
-              refreshExecutiveSales();
-            },
-            { timeout: 1200 },
-          );
-          return;
-        }
-
-        refreshExecutiveSales();
-      }, Math.max(0, Number(delay) || 0));
-    }
-    function refreshExecutiveSales() {
-      if (!isAppsScriptRuntime()) return;
-
-      const filters = readExecutiveFilters();
-      const filterKey = getExecutiveFilterKey(filters);
-
-      if (!filterKey) return;
-
-      if (
-        filterKey === executiveState.loadedFilterKey &&
-        executiveState.latestSupport
-      ) {
-        renderExecutiveSupport(executiveState.latestSupport);
-        return;
-      }
-
-      if (filterKey === executiveState.inFlightFilterKey) return;
-
-      const requestVersion = executiveState.requestVersion + 1;
-      executiveState.requestVersion = requestVersion;
-      executiveState.supportLoading = true;
-      executiveState.inFlightFilterKey = filterKey;
-
-      google.script.run
-        .withSuccessHandler((supportData) => {
-          if (requestVersion !== executiveState.requestVersion) return;
-
-          executiveState.supportLoading = false;
-          executiveState.inFlightFilterKey = "";
-          executiveState.loadedFilterKey = filterKey;
-          renderExecutiveSupport(supportData);
-        })
-        .withFailureHandler((error) => {
-          if (requestVersion !== executiveState.requestVersion) return;
-
-          executiveState.supportLoading = false;
-          executiveState.inFlightFilterKey = "";
-          console.warn(
-            "Executive sales support could not be loaded:",
-            error?.message || error,
-          );
-        })
-        .getExecutiveSalesSupport(filters);
-    }
     function getExecutiveFilterKey(filters) {
       const safeFilters = filters || {};
 
