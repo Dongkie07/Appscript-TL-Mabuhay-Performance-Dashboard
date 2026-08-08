@@ -320,7 +320,7 @@
             return `
             <tr>
               <td>${escapeSlotSharingHtml(formatSlotSharingDate(row.date))}</td>
-              <td><span class="slot-sharing-service">${escapeSlotSharingHtml(row.service)}</span></td>
+              <td><span class="slot-sharing-service slot-sharing-course--${row.service.toLowerCase()}">${escapeSlotSharingHtml(row.service)}</span></td>
               <td>${codeDisplay}</td>
               <td class="${row.sourceKnown === false ? "slot-sharing-source-pending" : ""}">
                 <strong>${escapeSlotSharingHtml(row.lender)}</strong><br>

@@ -130,18 +130,6 @@
 
       const panels = [];
 
-      if (merged.tdc) {
-        panels.push(
-          createSlotAnalyticsPanelNoSales(merged.tdc, "TDC"),
-        );
-      }
-
-      if (merged.pdc) {
-        panels.push(
-          createSlotAnalyticsPanelNoSales(merged.pdc, "PDC"),
-        );
-      }
-
       if (merged.tdc || merged.pdc) {
         panels.push(
           createBothSourceSalesCard(

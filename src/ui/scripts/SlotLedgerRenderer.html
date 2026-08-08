@@ -619,6 +619,17 @@
           ? "\u2014"
           : formatPercent(latest.utilization);
 
-      line.append(tag, period, detail, meter, idle, pct);
+      const trendBadge = document.createElement("span");
+      if (branchData && branchData.trend) {
+        const presentation = getTrendPresentation(branchData.trend.status);
+        trendBadge.className = `slot-trend-badge ${presentation.className}`;
+        trendBadge.textContent = `${presentation.symbol} ${presentation.label}`;
+      } else {
+        const presentation = getTrendPresentation("INSUFFICIENT_DATA");
+        trendBadge.className = `slot-trend-badge ${presentation.className}`;
+        trendBadge.textContent = `${presentation.symbol} ${presentation.label}`;
+      }
+
+      line.append(tag, period, detail, meter, idle, pct, trendBadge);
       return line;
     }
