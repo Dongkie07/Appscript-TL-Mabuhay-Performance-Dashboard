@@ -403,3 +403,255 @@
 
       return `${sign}${numericValue.toFixed(1)}%`;
     }
+    function createSlotAnalyticsPanelNoSales(branch, courseCode) {
+      const analytics = calculateSlotAnalytics(branch);
+      const panel = document.createElement("section");
+
+      panel.className = "slot-analytics-panel";
+
+      const section = document.createElement("div");
+      const heading = document.createElement("div");
+      const title = document.createElement("div");
+      const eyebrow = document.createElement("span");
+      const strong = document.createElement("strong");
+      const meta = document.createElement("small");
+      const trendPresentation = getTrendPresentation(
+        branch.trend.status,
+      );
+      const trendBadge = document.createElement("span");
+      const statistics = document.createElement("div");
+
+      section.className = "slot-analytics-summary";
+      heading.className = "slot-analytics-heading";
+      title.className = "slot-analytics-title";
+      eyebrow.textContent = `${courseCode} weekly capacity`;
+      strong.textContent = branch.branchName;
+      meta.textContent = branch.region;
+      title.append(eyebrow, strong, meta);
+
+      trendBadge.className =
+        `slot-trend-badge ${trendPresentation.className}`;
+      trendBadge.textContent =
+        `${trendPresentation.symbol} ${trendPresentation.label}`;
+      heading.append(title, trendBadge);
+
+      statistics.className = "slot-analytics-stat-grid";
+      statistics.append(
+        createAnalyticsStatistic(
+          "Current utilization",
+          branch.latest.utilization == null
+            ? "\u2014"
+            : formatPercent(branch.latest.utilization),
+          branch.latest.periodLabel,
+        ),
+        createAnalyticsStatistic(
+          "Slots used",
+          branch.latest.allocated > 0
+            ? `${formatCount(branch.latest.used)} of ${formatCount(
+                branch.latest.allocated,
+              )}`
+            : "\u2014",
+          "Latest usable slot record",
+        ),
+        createAnalyticsStatistic(
+          branch.latest.aboveAllocation > 0
+            ? "Above allocation"
+            : "Idle slots",
+          branch.latest.allocated == null
+            ? "\u2014"
+            : formatCount(
+                branch.latest.aboveAllocation > 0
+                  ? branch.latest.aboveAllocation
+                  : branch.latest.idle,
+              ),
+          branch.latest.allocated == null
+            ? "No usable allocation record"
+            : branch.latest.aboveAllocation > 0
+              ? "Validate capacity and usage"
+              : "Unused in the latest record",
+        ),
+        createAnalyticsStatistic(
+          "Period average",
+          branch.periodAverage.utilization == null
+            ? "\u2014"
+            : formatPercent(
+                branch.periodAverage.utilization,
+              ),
+          `${formatCount(
+            branch.periodAverage.reports,
+          )} weekly records`,
+        ),
+      );
+
+      section.append(heading, statistics);
+      panel.append(
+        section,
+        createSlotAnalyticsInsight(branch, analytics),
+        createSlotAnalyticsFooter(branch, analytics),
+      );
+      return panel;
+    }
+    function createBothSourceSalesCard(tdcHistory, pdcHistory) {
+      const salesByPeriod = Object.create(null);
+
+      [tdcHistory || [], pdcHistory || []].forEach(function collectHistory(history) {
+        history.forEach(function collectSales(row) {
+          const periodKey = String(row.periodKey || "");
+          if (!periodKey) return;
+
+          const sales = Number(row.sales) || 0;
+          if (salesByPeriod[periodKey] == null) {
+            salesByPeriod[periodKey] = sales;
+          } else {
+            // TDC and PDC histories point to the same source-branch weekly
+            // business record. Keep one value per week so sales are never
+            // counted twice in BOTH mode.
+            salesByPeriod[periodKey] = Math.max(
+              Number(salesByPeriod[periodKey]) || 0,
+              sales,
+            );
+          }
+        });
+      });
+
+      const periodKeys = Object.keys(salesByPeriod);
+      const totalSales = periodKeys.reduce(
+        (sum, periodKey) => sum + (Number(salesByPeriod[periodKey]) || 0),
+        0,
+      );
+      const card = document.createElement("section");
+      const label = document.createElement("span");
+      const value = document.createElement("strong");
+      const note = document.createElement("small");
+
+      card.className = "slot-both-sales-card";
+      label.textContent = "Selected-period source sales";
+      value.className = "mono";
+      value.textContent = periodKeys.length
+        ? formatExactCurrency(totalSales)
+        : "—";
+      note.textContent = periodKeys.length
+        ? `Encoded source-branch sales across ${formatCount(periodKeys.length)} unique listed week(s); shown once for BOTH mode.`
+        : "No slot weeks available for source-sales comparison.";
+      card.append(label, value, note);
+      return card;
+    }
+    function createBothAnalyticsTable(tdcHistory, pdcHistory) {
+      const pdcByPeriod = Object.create(null);
+
+      pdcHistory.forEach(function indexPdc(row) {
+        pdcByPeriod[row.periodKey] = row;
+      });
+
+      const allPeriodKeys = Object.create(null);
+      tdcHistory.forEach(function collectTdc(row) {
+        allPeriodKeys[row.periodKey] = row.periodLabel;
+      });
+      pdcHistory.forEach(function collectPdc(row) {
+        if (!allPeriodKeys[row.periodKey]) {
+          allPeriodKeys[row.periodKey] = row.periodLabel;
+        }
+      });
+
+      const orderedKeys = Object.keys(allPeriodKeys)
+        .map(Number)
+        .sort(function sortKeys(a, b) { return a - b; });
+
+      const section = document.createElement("section");
+      const heading = document.createElement("div");
+      const title = document.createElement("h3");
+      const subtitle = document.createElement("span");
+      const wrap = document.createElement("div");
+      const table = document.createElement("table");
+      table.className = "slot-both-table";
+      const head = document.createElement("thead");
+      const body = document.createElement("tbody");
+      const headRow = document.createElement("tr");
+
+      section.className = "slot-analytics-history";
+      heading.className = "slot-analytics-history-heading";
+      title.textContent = "Weekly performance history";
+      subtitle.textContent =
+        "Combined TDC and PDC allocation, usage, and utilization";
+      heading.append(title, subtitle);
+
+      [
+        "Week",
+        "TDC Used",
+        "TDC Alloc",
+        "TDC Idle",
+        "TDC Util",
+        "PDC Used",
+        "PDC Alloc",
+        "PDC Idle",
+        "PDC Util",
+      ].forEach(function addHeader(label) {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        if (label !== "Week") {
+          cell.className = "number";
+        }
+        headRow.appendChild(cell);
+      });
+      head.appendChild(headRow);
+
+      const tdcByPeriod = Object.create(null);
+      tdcHistory.forEach(function indexTdc(row) {
+        tdcByPeriod[row.periodKey] = row;
+      });
+
+      orderedKeys.forEach(function renderRow(periodKey) {
+        const tdc = tdcByPeriod[periodKey] || {};
+        const pdc = pdcByPeriod[periodKey] || {};
+        const tableRow = document.createElement("tr");
+        const weekLabel = tdc.periodLabel || pdc.periodLabel || "";
+        const weekNum = periodKey % 100;
+        const compactLabel = weekNum > 0 ? `W${weekNum}` : weekLabel;
+
+        tableRow.append(
+          createAnalyticsTableCell(compactLabel, false, weekLabel),
+          createAnalyticsTableCell(
+            tdc.used == null ? "\u2014" : formatCount(tdc.used), true,
+          ),
+          createAnalyticsTableCell(
+            tdc.allocated == null ? "\u2014" : formatCount(tdc.allocated), true,
+          ),
+          createAnalyticsTableCell(
+            tdc.idle == null ? "\u2014" : formatCount(tdc.idle), true,
+          ),
+          createBothUtilCell(tdc.utilization),
+          createAnalyticsTableCell(
+            pdc.used == null ? "\u2014" : formatCount(pdc.used), true,
+          ),
+          createAnalyticsTableCell(
+            pdc.allocated == null ? "\u2014" : formatCount(pdc.allocated), true,
+          ),
+          createAnalyticsTableCell(
+            pdc.idle == null ? "\u2014" : formatCount(pdc.idle), true,
+          ),
+          createBothUtilCell(pdc.utilization),
+        );
+        body.appendChild(tableRow);
+      });
+
+      if (!orderedKeys.length) {
+        const emptyRow = document.createElement("tr");
+        const emptyCell = document.createElement("td");
+        emptyCell.colSpan = 9;
+        emptyCell.className = "slot-analytics-empty";
+        emptyCell.textContent =
+          "No weekly slot history is available in this selection.";
+        emptyRow.appendChild(emptyCell);
+        body.appendChild(emptyRow);
+      }
+
+      table.append(head, body);
+      wrap.className = "slot-analytics-table-wrap";
+      wrap.appendChild(table);
+      section.append(heading, wrap);
+      return section;
+    }
+    function createBothUtilCell(utilization) {
+      const level = getSlotUtilizationLevel(utilization);
+      return createAnalyticsUtilizationCell(utilization, level);
+    }

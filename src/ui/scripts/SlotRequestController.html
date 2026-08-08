@@ -53,6 +53,10 @@
       }
     }
     function findSlotBranchByKey(branchKey) {
+      if (dashboardState.slotCourse === "both") {
+        return findBothSlotBranchesByKey(branchKey);
+      }
+
       const courseData = getSelectedCapacityCourse();
 
       if (!courseData) {
@@ -62,6 +66,33 @@
       return courseData.branches.find(
         (branch) => branch.branchKey === branchKey,
       ) || null;
+    }
+    function findBothSlotBranchesByKey(branchKey) {
+      const capacity =
+        dashboardState.slotData && dashboardState.slotData.capacity;
+
+      if (!capacity) return null;
+
+      const tdcBranches = capacity.tdc ? capacity.tdc.branches : [];
+      const pdcBranches = capacity.pdc ? capacity.pdc.branches : [];
+      const tdcBranch = tdcBranches.find(
+        (branch) => branch.branchKey === branchKey,
+      ) || null;
+      const pdcBranch = pdcBranches.find(
+        (branch) => branch.branchKey === branchKey,
+      ) || null;
+
+      if (!tdcBranch && !pdcBranch) return null;
+
+      const primary = tdcBranch || pdcBranch;
+
+      return {
+        branchKey: branchKey,
+        branchName: primary.branchName,
+        region: primary.region,
+        tdc: tdcBranch,
+        pdc: pdcBranch,
+      };
     }
     function handleBranchTableClick(event) {
       const branchButton = event.target.closest("[data-branch-key]");

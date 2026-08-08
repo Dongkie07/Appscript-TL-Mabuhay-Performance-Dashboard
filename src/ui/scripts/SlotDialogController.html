@@ -75,6 +75,13 @@
       resetSlotDialogViewport(dialog);
     }
     function renderSlotAnalyticsDialog(branch) {
+      const isBothMode = dashboardState.slotCourse === "both";
+
+      if (isBothMode) {
+        renderBothAnalyticsDialog(branch);
+        return;
+      }
+
       const courseCode = dashboardState.slotCourse.toUpperCase();
       const note = document.querySelector(
         "#branchUtilizationDialog .slot-dialog-note",
@@ -99,6 +106,68 @@
       getElementById("slotCourseCards").replaceChildren(
         createSlotAnalyticsPanel(branch, courseCode),
       );
+    }
+    function renderBothAnalyticsDialog(merged) {
+      const note = document.querySelector(
+        "#branchUtilizationDialog .slot-dialog-note",
+      );
+
+      getElementById("slotDialogTitle").textContent =
+        `${merged.branchName} · TDC & PDC analytics`;
+      getElementById("slotDialogMeta").textContent = [
+        merged.region,
+        `${formatFriendlyDate(
+          dashboardState.data.filtersApplied.startDate,
+        )} – ${formatFriendlyDate(
+          dashboardState.data.filtersApplied.endDate,
+        )}`,
+      ].join(" • ");
+
+      if (note) {
+        note.textContent =
+          "TDC and PDC capacity are shown separately for the same source branch. Source-branch sales are shown once so they are not double-counted.";
+      }
+
+      const panels = [];
+
+      if (merged.tdc) {
+        panels.push(
+          createSlotAnalyticsPanelNoSales(merged.tdc, "TDC"),
+        );
+      }
+
+      if (merged.pdc) {
+        panels.push(
+          createSlotAnalyticsPanelNoSales(merged.pdc, "PDC"),
+        );
+      }
+
+      if (merged.tdc || merged.pdc) {
+        panels.push(
+          createBothSourceSalesCard(
+            merged.tdc ? merged.tdc.weeklyHistory || [] : [],
+            merged.pdc ? merged.pdc.weeklyHistory || [] : [],
+          ),
+        );
+      }
+
+      if (merged.tdc || merged.pdc) {
+        panels.push(
+          createBothAnalyticsTable(
+            merged.tdc ? merged.tdc.weeklyHistory || [] : [],
+            merged.pdc ? merged.pdc.weeklyHistory || [] : [],
+          ),
+        );
+      }
+
+      if (!panels.length) {
+        const empty = document.createElement("div");
+        empty.className = "slot-analytics-empty";
+        empty.textContent = "No TDC or PDC data available for this branch.";
+        panels.push(empty);
+      }
+
+      getElementById("slotCourseCards").replaceChildren(...panels);
     }
     function closeBranchUtilizationDialog() {
       const dialog = getElementById("branchUtilizationDialog");

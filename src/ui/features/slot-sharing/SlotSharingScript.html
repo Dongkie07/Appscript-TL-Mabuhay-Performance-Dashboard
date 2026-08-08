@@ -25,9 +25,14 @@
       );
       const searchInput = document.getElementById("slotSharingSearch");
       const jumpBtn = document.getElementById("jumpToSlotSharingBtn");
+      const returnBtn = document.getElementById("returnToCapacityBtn");
 
       jumpBtn?.addEventListener("click", () => {
         document.getElementById("slotSharingPanel")?.scrollIntoView({ behavior: "smooth" });
+      });
+
+      returnBtn?.addEventListener("click", () => {
+        document.getElementById("slotUtilizationView")?.scrollIntoView({ behavior: "smooth" });
       });
 
       tab?.addEventListener("click", () => {
@@ -292,7 +297,7 @@
       if (!rows.length) {
         body.innerHTML = `
           <tr>
-            <td colspan="7" class="slot-sharing-empty">
+            <td colspan="8" class="slot-sharing-empty">
               No slot-sharing records match the selected filters.
             </td>
           </tr>
@@ -302,10 +307,21 @@
 
       body.innerHTML = rows
         .map(
-          (row) => `
+          (row) => {
+            let codeDisplay = "—";
+            if (row.serviceCodes && row.serviceCodes.length > 0) {
+              const joined = row.serviceCodes.join(", ");
+              if (row.serviceCodes.length > 1) {
+                codeDisplay = `<span title="${escapeSlotSharingHtml(joined)}" class="slot-sharing-multi-code">${row.serviceCodes.length} codes</span>`;
+              } else {
+                codeDisplay = escapeSlotSharingHtml(joined);
+              }
+            }
+            return `
             <tr>
               <td>${escapeSlotSharingHtml(formatSlotSharingDate(row.date))}</td>
               <td><span class="slot-sharing-service">${escapeSlotSharingHtml(row.service)}</span></td>
+              <td>${codeDisplay}</td>
               <td class="${row.sourceKnown === false ? "slot-sharing-source-pending" : ""}">
                 <strong>${escapeSlotSharingHtml(row.lender)}</strong><br>
                 <small>${escapeSlotSharingHtml(row.lenderRegion)}</small>
@@ -318,7 +334,8 @@
               <td class="number mono">${formatSlotSharingCount(row.transactions)}</td>
               <td class="number mono">${formatSlotSharingCurrency(row.sales)}</td>
             </tr>
-          `,
+          `;
+          }
         )
         .join("");
     }
@@ -329,7 +346,7 @@
 
       body.innerHTML = `
         <tr>
-          <td colspan="7" class="slot-sharing-empty">
+          <td colspan="8" class="slot-sharing-empty">
             Loading lender and borrower relationships…
           </td>
         </tr>
@@ -343,7 +360,7 @@
 
       body.innerHTML = `
         <tr>
-          <td colspan="7" class="slot-sharing-empty">
+          <td colspan="8" class="slot-sharing-empty">
             ${escapeSlotSharingHtml(message)}
           </td>
         </tr>

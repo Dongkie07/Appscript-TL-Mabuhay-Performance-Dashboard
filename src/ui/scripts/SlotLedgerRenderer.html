@@ -3,10 +3,39 @@
         return;
       }
 
+      const isBothMode = dashboardState.slotCourse === "both";
       const courseData = getSelectedCapacityCourse();
       const host = getElementById("slotUtilizationRows");
 
       if (!courseData) {
+        return;
+      }
+
+      if (isBothMode) {
+        const capacity = dashboardState.slotData.capacity;
+        const mergedBranches = mergeBothCourseBranches(
+          capacity.tdc ? capacity.tdc.branches : [],
+          capacity.pdc ? capacity.pdc.branches : [],
+        );
+        const visibleBranches = filterAndSortBothBranches(mergedBranches);
+
+        host.replaceChildren(
+          ...visibleBranches.map(createSlotLedgerBothRow),
+        );
+
+        if (!visibleBranches.length) {
+          const emptyState = document.createElement("div");
+          emptyState.className = "slot-ledger-empty";
+          emptyState.textContent =
+            "No branches match this utilization filter.";
+          host.appendChild(emptyState);
+        }
+
+        getElementById("slotBranchCount").textContent =
+          `${formatCount(visibleBranches.length)} of ` +
+          `${formatCount(mergedBranches.length)} branches`;
+        getElementById("slotLedgerSubtitle").textContent =
+          "Both TDC and PDC current status per branch. Select a row for full detail.";
         return;
       }
 
@@ -30,7 +59,7 @@
         `${formatCount(visibleBranches.length)} of ` +
         `${formatCount(courseData.branches.length)} branches`;
       getElementById("slotLedgerSubtitle").textContent =
-        `${dashboardState.slotCourse.toUpperCase()} current status uses each branch’s latest usable record. Select a row for full TDC and PDC detail.`;
+        `${dashboardState.slotCourse.toUpperCase()} current status uses each branch's latest usable record. Select a row for full TDC and PDC detail.`;
     }
     function filterAndSortCapacityBranches(branches) {
       const searchText = getElementById("slotBranchSearch")
@@ -226,18 +255,12 @@
       cell.append(value, label);
       return cell;
     }
-    function createSlotMeterCell(branch, level) {
-      const latest = branch.latest;
-      const dataQuality = getSlotDataQuality(branch);
-      const cell = document.createElement("span");
+    function createSlotSegmentMeter(utilization, level) {
       const meter = document.createElement("span");
-      const label = document.createElement("small");
-      const utilization = Number(latest.utilization) || 0;
       const activeSegments = Math.round(
-        Math.min(Math.max(utilization, 0), 100) / 5,
+        Math.min(Math.max(Number(utilization) || 0, 0), 100) / 5,
       );
 
-      cell.className = "slot-meter-cell";
       meter.className = `slot-segment-meter ${level}`;
       meter.setAttribute("aria-hidden", "true");
 
@@ -253,7 +276,19 @@
         );
         meter.appendChild(segment);
       }
+      
+      return meter;
+    }
 
+    function createSlotMeterCell(branch, level) {
+      const latest = branch.latest;
+      const dataQuality = getSlotDataQuality(branch);
+      const cell = document.createElement("span");
+      const utilization = Number(latest.utilization) || 0;
+      const meter = createSlotSegmentMeter(utilization, level);
+      const label = document.createElement("small");
+
+      cell.className = "slot-meter-cell";
       label.className = "mono";
 
       if (latest.allocated == null && latest.used != null) {
@@ -367,4 +402,223 @@
       }
 
       return "Near capacity — review additional slots";
+    }
+    function mergeBothCourseBranches(tdcBranches, pdcBranches) {
+      const map = Object.create(null);
+
+      tdcBranches.forEach(function addTdc(branch) {
+        map[branch.branchKey] = {
+          branchKey: branch.branchKey,
+          branchName: branch.branchName,
+          region: branch.region,
+          tdc: branch,
+          pdc: null,
+        };
+      });
+
+      pdcBranches.forEach(function addPdc(branch) {
+        if (map[branch.branchKey]) {
+          map[branch.branchKey].pdc = branch;
+        } else {
+          map[branch.branchKey] = {
+            branchKey: branch.branchKey,
+            branchName: branch.branchName,
+            region: branch.region,
+            tdc: null,
+            pdc: branch,
+          };
+        }
+      });
+
+      return Object.keys(map).map(function toValue(key) {
+        return map[key];
+      });
+    }
+    function filterAndSortBothBranches(mergedBranches) {
+      const searchText = getElementById("slotBranchSearch")
+        .value.trim()
+        .toLowerCase();
+      const selectedLevel =
+        getElementById("slotLevelFilter").value;
+      const selectedSort = getElementById("slotSort").value;
+
+      const filtered = mergedBranches.filter(function filterBoth(merged) {
+        const matchesSearch =
+          !searchText ||
+          merged.branchName.toLowerCase().includes(searchText) ||
+          merged.region.toLowerCase().includes(searchText);
+
+        if (!matchesSearch) return false;
+        if (selectedLevel === "all") return true;
+
+        const tdcLevel = merged.tdc
+          ? getSlotUtilizationLevel(merged.tdc.latest.utilization)
+          : "noData";
+        const pdcLevel = merged.pdc
+          ? getSlotUtilizationLevel(merged.pdc.latest.utilization)
+          : "noData";
+
+        return selectedLevel === tdcLevel || selectedLevel === pdcLevel;
+      });
+
+      filtered.sort(function sortBoth(first, second) {
+        if (selectedSort === "branchName") {
+          return first.branchName.localeCompare(second.branchName);
+        }
+
+        var firstUtil = getBothSortUtilization(first);
+        var secondUtil = getBothSortUtilization(second);
+
+        if (selectedSort === "decliningFirst") {
+          var trendDiff =
+            getBothTrendRank(first) - getBothTrendRank(second);
+          if (trendDiff !== 0) return trendDiff;
+        }
+
+        if (selectedSort === "idleDesc") {
+          var firstIdle =
+            (first.tdc ? first.tdc.latest.idle || 0 : 0) +
+            (first.pdc ? first.pdc.latest.idle || 0 : 0);
+          var secondIdle =
+            (second.tdc ? second.tdc.latest.idle || 0 : 0) +
+            (second.pdc ? second.pdc.latest.idle || 0 : 0);
+          return secondIdle - firstIdle;
+        }
+
+        if (firstUtil == null) {
+          return secondUtil == null ? 0 : 1;
+        }
+        if (secondUtil == null) {
+          return -1;
+        }
+
+        if (selectedSort === "utilizationDesc") {
+          return secondUtil - firstUtil;
+        }
+
+        return firstUtil - secondUtil;
+      });
+
+      return filtered;
+    }
+    function getBothTrendRank(merged) {
+      const trendOrder = {
+        DECLINING: 0,
+        STABLE: 1,
+        GROWING: 2,
+        INSUFFICIENT_DATA: 3,
+      };
+      const ranks = [];
+
+      [merged.tdc, merged.pdc].forEach(function collectTrend(branch) {
+        if (!branch || !branch.trend) return;
+        const status = branch.trend.status || "INSUFFICIENT_DATA";
+        ranks.push(
+          Object.prototype.hasOwnProperty.call(trendOrder, status)
+            ? trendOrder[status]
+            : trendOrder.INSUFFICIENT_DATA,
+        );
+      });
+
+      return ranks.length
+        ? Math.min(...ranks)
+        : trendOrder.INSUFFICIENT_DATA;
+    }
+    function getBothSortUtilization(merged) {
+      const values = [];
+
+      if (
+        merged.tdc &&
+        merged.tdc.latest &&
+        merged.tdc.latest.utilization != null
+      ) {
+        values.push(Number(merged.tdc.latest.utilization));
+      }
+
+      if (
+        merged.pdc &&
+        merged.pdc.latest &&
+        merged.pdc.latest.utilization != null
+      ) {
+        values.push(Number(merged.pdc.latest.utilization));
+      }
+
+      return values.length ? Math.max(...values) : null;
+    }
+    function createSlotLedgerBothRow(merged) {
+      const row = document.createElement("button");
+
+      row.type = "button";
+      row.className = "slot-ledger-row slot-both-row";
+      row.dataset.slotBranchKey = merged.branchKey;
+      row.setAttribute(
+        "aria-label",
+        `View TDC and PDC slot utilization for ${merged.branchName}`,
+      );
+
+      const identity = document.createElement("span");
+      identity.className = "slot-ledger-branch";
+      const name = document.createElement("strong");
+      name.textContent = merged.branchName;
+      const region = document.createElement("small");
+      region.textContent = merged.region;
+      const arrow = document.createElement("i");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "\u203a";
+      identity.append(name, region, arrow);
+
+      const lines = document.createElement("span");
+      lines.className = "slot-both-lines";
+      lines.append(
+        createBothCourseLine("TDC", merged.tdc),
+        createBothCourseLine("PDC", merged.pdc),
+      );
+
+      row.append(identity, lines);
+      return row;
+    }
+    function createBothCourseLine(label, branchData) {
+      const line = document.createElement("span");
+      line.className = "slot-both-line";
+
+      const tag = document.createElement("strong");
+      tag.className = "slot-both-tag";
+      tag.textContent = label;
+
+      if (!branchData || branchData.latest.allocated == null) {
+        const noData = document.createElement("span");
+        noData.className = "slot-both-nodata";
+        noData.textContent = "No data";
+        line.append(tag, noData);
+        return line;
+      }
+
+      const latest = branchData.latest;
+      const level = getSlotUtilizationLevel(latest.utilization);
+
+      const period = document.createElement("span");
+      period.className = "slot-both-period";
+      period.textContent = latest.periodLabel || "Latest record";
+
+      const detail = document.createElement("span");
+      detail.className = "slot-both-detail mono";
+      detail.textContent =
+        `${formatCount(latest.used != null ? latest.used : 0)} / ${formatCount(latest.allocated)}`;
+
+      const meter = createSlotSegmentMeter(latest.utilization, level);
+
+      const idle = document.createElement("span");
+      idle.className = "slot-both-idle mono";
+      idle.textContent =
+        latest.idle != null ? `${formatCount(latest.idle)} idle` : "";
+
+      const pct = document.createElement("strong");
+      pct.className = `slot-both-pct ${level}`;
+      pct.textContent =
+        latest.utilization == null
+          ? "\u2014"
+          : formatPercent(latest.utilization);
+
+      line.append(tag, period, detail, meter, idle, pct);
+      return line;
     }

@@ -40,8 +40,15 @@
         return;
       }
 
-      const courseCode = dashboardState.slotCourse.toUpperCase();
+      const isBothMode = dashboardState.slotCourse === "both";
+      const courseCode = isBothMode
+        ? "TDC & PDC"
+        : dashboardState.slotCourse.toUpperCase();
       const dashboardData = dashboardState.data;
+      getElementById("slotUtilizationView").classList.toggle(
+        "slot-both-mode",
+        isBothMode,
+      );
       const selectedRange = dashboardData.filtersApplied;
       const isAllAvailable =
         selectedRange.startDate === dashboardData.availableDateRange.min &&
@@ -54,9 +61,13 @@
         `${formatFriendlyDate(selectedRange.startDate)} – ` +
         `${formatFriendlyDate(selectedRange.endDate)}`;
       getElementById("slotSelectionExplanation").textContent =
-        isAllAvailable
-          ? `All available data is selected. Current status uses each branch’s latest ${courseCode} slot record; the selected-period average uses every usable weekly record.`
-          : `Current status uses each branch’s latest available ${courseCode} slot record inside the selected dates; the selected-period average uses all usable weekly records in those dates.`;
+        isBothMode
+          ? isAllAvailable
+            ? "All available data is selected. Both TDC and PDC metrics are shown per branch using each branch's latest available slot record."
+            : "Both TDC and PDC metrics are shown per branch using each branch's latest available slot record inside the selected dates."
+          : isAllAvailable
+            ? `All available data is selected. Current status uses each branch’s latest ${courseCode} slot record; the selected-period average uses every usable weekly record.`
+            : `Current status uses each branch’s latest available ${courseCode} slot record inside the selected dates; the selected-period average uses all usable weekly records in those dates.`;
 
       if (!dashboardState.slotData) {
         if (!dashboardState.slotLoading) {
@@ -68,20 +79,170 @@
       const courseData = getSelectedCapacityCourse();
 
       if (!courseData) {
-        renderEmptySlotUtilizationView(courseCode);
+        renderEmptySlotUtilizationView(isBothMode ? "TDC & PDC" : courseCode);
         return;
       }
 
-      renderSlotSummary(courseData);
+      if (isBothMode) {
+        renderBothSlotSummary(dashboardState.slotData.capacity);
+      } else {
+        renderSlotSummary(courseData);
+      }
       renderSlotUtilizationRows();
     }
     function getSelectedCapacityCourse() {
       const capacity =
         dashboardState.slotData && dashboardState.slotData.capacity;
 
-      return capacity
-        ? capacity[dashboardState.slotCourse]
-        : null;
+      if (!capacity) return null;
+
+      if (dashboardState.slotCourse === "both") {
+        return capacity.tdc || capacity.pdc || null;
+      }
+
+      return capacity[dashboardState.slotCourse] || null;
+    }
+    function renderBothSlotSummary(capacity) {
+      const tdc = capacity && capacity.tdc ? capacity.tdc : null;
+      const pdc = capacity && capacity.pdc ? capacity.pdc : null;
+
+      if (!tdc && !pdc) {
+        renderEmptySlotUtilizationView("TDC & PDC");
+        return;
+      }
+
+      const tdcSummary = tdc ? tdc.summary : null;
+      const pdcSummary = pdc ? pdc.summary : null;
+      const tdcLatest = tdcSummary ? tdcSummary.latest : null;
+      const pdcLatest = pdcSummary ? pdcSummary.latest : null;
+      const tdcAverage = tdcSummary ? tdcSummary.periodAverage : null;
+      const pdcAverage = pdcSummary ? pdcSummary.periodAverage : null;
+      const tdcCoverage = tdcSummary ? tdcSummary.coverage : {};
+      const pdcCoverage = pdcSummary ? pdcSummary.coverage : {};
+      const tdcCounts = tdcSummary ? tdcSummary.movementCounts : {};
+      const pdcCounts = pdcSummary ? pdcSummary.movementCounts : {};
+
+      const dualPercent = (first, second) =>
+        `TDC ${first == null ? "—" : formatPercent(first)} · ` +
+        `PDC ${second == null ? "—" : formatPercent(second)}`;
+      const dualCount = (first, second) =>
+        `TDC ${formatCount(first || 0)} · PDC ${formatCount(second || 0)}`;
+      const dualUsed = (latest, label) =>
+        latest && latest.allocated > 0
+          ? `${label} ${formatCount(latest.used)} / ${formatCount(latest.allocated)}`
+          : `${label} —`;
+
+      getElementById("slotLatestUtilization").textContent =
+        dualPercent(
+          tdcLatest ? tdcLatest.utilization : null,
+          pdcLatest ? pdcLatest.utilization : null,
+        );
+      getElementById("slotUsedOfAllocated").textContent =
+        `${dualUsed(tdcLatest, "TDC")} · ${dualUsed(pdcLatest, "PDC")}`;
+      getElementById("slotIdleSlots").textContent =
+        dualCount(
+          tdcLatest ? tdcLatest.idle : 0,
+          pdcLatest ? pdcLatest.idle : 0,
+        );
+      getElementById("slotPeriodAverage").textContent =
+        dualPercent(
+          tdcAverage ? tdcAverage.utilization : null,
+          pdcAverage ? pdcAverage.utilization : null,
+        );
+      getElementById("slotComparableBranches").textContent =
+        `TDC ${formatCount(tdcCoverage.comparableBranches || 0)} · ` +
+        `PDC ${formatCount(pdcCoverage.comparableBranches || 0)}`;
+
+      const officialBranchCount =
+        capacity.officialBranchCount ||
+        Math.max(
+          tdcCoverage.officialBranches || (tdc ? tdc.branches.length : 0),
+          pdcCoverage.officialBranches || (pdc ? pdc.branches.length : 0),
+        );
+
+      getElementById("slotComparableBasis").textContent =
+        `TDC ${formatCount(tdcCoverage.branchesWithUtilization || 0)} usable · ` +
+        `PDC ${formatCount(pdcCoverage.branchesWithUtilization || 0)} usable · ` +
+        `${formatCount(officialBranchCount)} official total`;
+      getElementById("slotLatestBasis").textContent =
+        `TDC ${formatCount(tdcCoverage.branchesWithUtilization || 0)} usable · ` +
+        `PDC ${formatCount(pdcCoverage.branchesWithUtilization || 0)} usable`;
+      getElementById("slotPeriodReports").textContent =
+        `TDC ${formatCount(tdcAverage ? tdcAverage.reports : 0)} · ` +
+        `PDC ${formatCount(pdcAverage ? pdcAverage.reports : 0)} weekly branch records`;
+
+      const tdcUtilization = tdcLatest ? tdcLatest.utilization : null;
+      const pdcUtilization = pdcLatest ? pdcLatest.utilization : null;
+      const progressCandidates = [tdcUtilization, pdcUtilization].filter(
+        (value) => value != null,
+      );
+      const progressValue = progressCandidates.length
+        ? Math.max(0, Math.min(100, Math.max(...progressCandidates)))
+        : 0;
+
+      getElementById("slotSystemProgressFill").style.width = `${progressValue}%`;
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuenow",
+        String(progressValue),
+      );
+      getElementById("slotSystemProgress").setAttribute(
+        "aria-valuetext",
+        dualPercent(tdcUtilization, pdcUtilization),
+      );
+      getElementById("slotHeroFootnote").textContent =
+        `Current idle slots: TDC ${formatCount(tdcLatest ? tdcLatest.idle : 0)} · ` +
+        `PDC ${formatCount(pdcLatest ? pdcLatest.idle : 0)}.`;
+      getElementById("slotMovementSummary").textContent =
+        `TDC ↑ ${formatCount(tdcCounts.growing || 0)} → ${formatCount(tdcCounts.stable || 0)} ↓ ${formatCount(tdcCounts.declining || 0)} · ` +
+        `PDC ↑ ${formatCount(pdcCounts.growing || 0)} → ${formatCount(pdcCounts.stable || 0)} ↓ ${formatCount(pdcCounts.declining || 0)}`;
+
+      renderBothSlotDataQuality(capacity, tdc, pdc, officialBranchCount);
+    }
+    function renderBothSlotDataQuality(
+      capacity,
+      tdc,
+      pdc,
+      officialBranchCount,
+    ) {
+      const tdcSummary = tdc ? tdc.summary : {};
+      const pdcSummary = pdc ? pdc.summary : {};
+      const tdcCoverage = tdcSummary.coverage || {};
+      const pdcCoverage = pdcSummary.coverage || {};
+      const tdcPeriod = tdcSummary.latestReportingPeriod || {};
+      const pdcPeriod = pdcSummary.latestReportingPeriod || {};
+      const latestPeriod =
+        Number(tdcPeriod.periodKey || 0) >= Number(pdcPeriod.periodKey || 0)
+          ? tdcPeriod
+          : pdcPeriod;
+
+      getElementById("slotOfficialBranches").textContent =
+        formatCount(officialBranchCount || 0);
+      getElementById("slotUsableBranches").textContent =
+        `TDC ${formatCount(tdcCoverage.branchesWithUtilization || 0)} · ` +
+        `PDC ${formatCount(pdcCoverage.branchesWithUtilization || 0)}`;
+      getElementById("slotNoDataBranches").textContent =
+        `TDC ${formatCount(tdcCoverage.branchesWithoutUsableUtilization || 0)} · ` +
+        `PDC ${formatCount(pdcCoverage.branchesWithoutUsableUtilization || 0)}`;
+      getElementById("slotBehindBranches").textContent =
+        `TDC ${formatCount(tdcCoverage.branchesBehindLatest || 0)} · ` +
+        `PDC ${formatCount(pdcCoverage.branchesBehindLatest || 0)}`;
+      getElementById("slotLatestReportingPeriod").textContent =
+        `Latest reporting week: ${latestPeriod.periodLabel || "—"}`;
+      getElementById("slotDataQualitySubtitle").textContent =
+        `TDC: ${formatCount(tdcCoverage.branchesWithUtilization || 0)} of ${formatCount(officialBranchCount || 0)} usable · ` +
+        `PDC: ${formatCount(pdcCoverage.branchesWithUtilization || 0)} of ${formatCount(officialBranchCount || 0)} usable.`;
+      getElementById("slotBehindBranchesHelp").textContent =
+        "TDC and PDC freshness counts are shown separately.";
+
+      const host = getElementById("slotValidationRows");
+      host.replaceChildren();
+      const note = document.createElement("div");
+      note.className = "slot-validation-empty";
+      note.textContent =
+        "Combined coverage is shown above. Select TDC or PDC for the course-specific validation list.";
+      host.appendChild(note);
+      getElementById("slotValidationSummary").textContent =
+        "Combined TDC/PDC coverage summary";
     }
     function renderEmptySlotUtilizationView(courseCode) {
       getElementById("slotLatestUtilization").textContent = "—";

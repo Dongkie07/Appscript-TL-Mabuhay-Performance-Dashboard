@@ -12,9 +12,20 @@
         collection branch used it.
       </p>
     </div>
-    <span class="slot-sharing-status mono" id="slotSharingStatus">
-      Open this tab to load
-    </span>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+      <button
+        type="button"
+        id="returnToCapacityBtn"
+        class="slot-course-tab"
+        title="Scroll back up to Branch Capacity"
+        style="min-width: auto; height: 28px; min-height: 28px; padding: 0 10px; background: transparent; border-color: var(--teal); color: var(--teal); cursor: pointer;"
+      >
+        ↑ Back to Branch Capacity
+      </button>
+      <span class="slot-sharing-status mono" id="slotSharingStatus">
+        Open this tab to load
+      </span>
+    </div>
   </div>
 
   <div class="slot-sharing-kpis" aria-label="Slot sharing summary">
@@ -77,6 +88,7 @@
         <tr>
           <th>Date</th>
           <th>Course</th>
+          <th>Service Code</th>
           <th>Lender / source branch</th>
           <th>Borrower / collection branch</th>
           <th class="number">Slots</th>
@@ -86,7 +98,7 @@
       </thead>
       <tbody id="slotSharingTableBody">
         <tr>
-          <td colspan="7" class="slot-sharing-empty">
+          <td colspan="8" class="slot-sharing-empty">
             Open the TDC &amp; PDC tab to load slot-sharing records.
           </td>
         </tr>

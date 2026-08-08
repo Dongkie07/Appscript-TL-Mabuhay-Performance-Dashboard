@@ -37,8 +37,10 @@ function aggregateMonthlyTargets_(salesSource, filters, aggregation) {
   for (let rowIndex = 0; rowIndex < salesSource.rows.length; rowIndex += 1) {
     const row = salesSource.rows[rowIndex];
 
+    const effectiveBranchKey = row.collectionBranchKey || row.branchKey;
+
     if (
-      !row.branchKey ||
+      !effectiveBranchKey ||
       Number(row.target || 0) <= 0 ||
       !row.year ||
       !row.month ||
@@ -61,7 +63,7 @@ function aggregateMonthlyTargets_(salesSource, filters, aggregation) {
 
     if (
       selectedBranch !== 'ALL' &&
-      row.branchKey !== selectedBranch
+      effectiveBranchKey !== selectedBranch
     ) {
       continue;
     }
@@ -138,8 +140,10 @@ function recordMonthlyTarget_(
     return;
   }
 
+  const effectiveBranchKey = salesRow.collectionBranchKey || salesRow.branchKey;
+
   const targetKey =
-    salesRow.branchKey +
+    effectiveBranchKey +
     '|' +
     salesRow.year +
     '-' +
@@ -150,7 +154,7 @@ function recordMonthlyTarget_(
   }
 
   monthlyTargets[targetKey] = {
-    branchKey: salesRow.branchKey,
+    branchKey: effectiveBranchKey,
     branchName: branchIdentity.branchName,
     region: branchIdentity.region,
     target: salesRow.target

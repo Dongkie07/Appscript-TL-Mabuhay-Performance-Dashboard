@@ -240,6 +240,7 @@ function createSalesRow_(
         : collectionRegion,
 
     generalServiceType: generalServiceType,
+    serviceCode: cleanText_(inputRow[6]),
     serviceGroup: normalizeServiceGroup_(
       generalServiceType || inputRow[6]
     ),

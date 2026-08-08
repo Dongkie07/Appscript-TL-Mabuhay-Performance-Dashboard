@@ -166,11 +166,17 @@ function buildSlotSharingDataFromSources_(
         slots: 0,
         transactions: 0,
         sales: 0,
-        sourceKnown: sourceKnown
+        sourceKnown: sourceKnown,
+        serviceCodes: []
       };
     }
 
     const relationship = relationshipMap[mapKey];
+    
+    if (row.serviceCode && relationship.serviceCodes.indexOf(row.serviceCode) === -1) {
+      relationship.serviceCodes.push(row.serviceCode);
+    }
+
     relationship.slots += lentSlots;
     relationship.transactions += numberOrZero_(row.transactions);
     relationship.sales += numberOrZero_(row.amount);
@@ -210,6 +216,7 @@ function buildSlotSharingDataFromSources_(
         borrower: item.borrower,
         borrowerKey: item.borrowerKey,
         borrowerRegion: item.borrowerRegion,
+        serviceCodes: item.serviceCodes,
         slots: round2_(item.slots),
         transactions: round2_(item.transactions),
         sales: round2_(item.sales),

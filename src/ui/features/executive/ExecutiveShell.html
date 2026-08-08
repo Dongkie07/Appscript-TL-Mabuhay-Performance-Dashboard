@@ -161,37 +161,14 @@
       const reconciliation = supportData.reconciliation || {};
       const kpis = supportData.kpis || {};
       const branchCount = Number(supportData.branchAchievementCount) || 0;
-      const targetSub = document.getElementById("kpiTargetSub");
-      const salesSub = document.getElementById("kpiSalesSub");
       const cacheNote = document.getElementById("executiveTrendCacheNote");
 
-      setText(
-        "kpiSales",
-        formatCurrency(reconciliation.encodedCollections ?? kpis.encodedCollections),
-      );
-      setText(
-        "kpiTarget",
-        kpis.targetAchievement == null
-          ? "—"
-          : formatPercentPrecise(kpis.targetAchievement),
-      );
+
       setText("executiveNonAmount", formatCurrency(reconciliation.nonSalesReceipts));
       setText("executiveReprintAmount", formatCurrency(reconciliation.reprints));
       setText("executiveEncodedAmount", formatCurrency(reconciliation.encodedCollections));
 
-      if (salesSub) {
-        const encodedRows =
-          Number(reconciliation.encodedRows) ||
-          (Number(reconciliation.includedRows) || 0) +
-            (Number(reconciliation.excludedRows) || 0);
-        salesSub.textContent =
-          `${formatNumber(encodedRows)} matched sales rows`;
-      }
 
-      if (targetSub) {
-        targetSub.textContent =
-          `Average of ${formatNumber(branchCount)} branch achievement rows`;
-      }
 
       if (cacheNote) {
         cacheNote.textContent =
