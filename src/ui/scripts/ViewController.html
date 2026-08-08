@@ -1,196 +1,207 @@
-    function handleDashboardViewClick(event) {
-      showDashboardView(event.currentTarget.dataset.dashboardView);
-    }
-    function showDashboardView(viewId) {
+function handleDashboardViewClick(event) {
+  const viewId =
+    event &&
+    event.currentTarget &&
+    event.currentTarget.dataset
+      ? event.currentTarget.dataset.dashboardView
+      : "";
+
+  if (!viewId) {
+    return;
+  }
+
+  showDashboardView(viewId);
+}
+function showDashboardView(viewId) {
+  if (!viewId) {
+    viewId = "overviewView";
+  }
+
+  // activeView is the canonical state property. Keep currentView
+  // temporarily for backwards compatibility with older controllers.
+  dashboardState.activeView = viewId;
   dashboardState.currentView = viewId;
+
   const isSlotView = viewId === "slotUtilizationView";
   const isRegionalView = viewId === "regionalScorecardView";
 
-  // Unhide the selected view and hide the others
   ["overviewView", "slotUtilizationView", "regionalScorecardView"].forEach((id) => {
     const element = getElementById(id);
     if (!element) return;
     element.classList.toggle("hidden", id !== viewId);
   });
 
-  // Highlight the active tab button
   document.querySelectorAll(".dashboard-view-tab").forEach((tab) => {
     const active = tab.getAttribute("data-dashboard-view") === viewId;
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-selected", active ? "true" : "false");
   });
 
-  // Load or render data for the selected view
   if (isSlotView) {
-    ensureSlotUtilizationData();
-  } else if (isRegionalView) {
+    if (typeof ensureSlotUtilizationData === "function") {
+      ensureSlotUtilizationData();
+    }
+  } else if (
+    isRegionalView &&
+    typeof renderRegionalScorecard === "function"
+  ) {
     renderRegionalScorecard();
   }
 }
-    function renderDashboardView() {
-      const dashboardData = dashboardState.data;
-      const renderVersion = dashboardState.renderVersion + 1;
+function renderDashboardView() {
+  const dashboardData = dashboardState.data;
+  const renderVersion = dashboardState.renderVersion + 1;
 
-      dashboardState.renderVersion = renderVersion;
+  dashboardState.renderVersion = renderVersion;
+  if (typeof window.renderExecutiveSupport === "function" && dashboardData.executiveSales) {
+    window.renderExecutiveSupport(dashboardData.executiveSales);
+  }
+  if (window.executiveState?.monthlyActive && typeof window.showMonthlySalesView === "function") {
+    window.showMonthlySalesView(true);
+  } else if (window.executiveState?.trendsActive && typeof window.showSalesTrendsView === "function") {
+    window.showSalesTrendsView(true);
+  } else {
+    showDashboardView(dashboardState.activeView || "overviewView");
+  }
+  renderConnectionStatus();
+  renderKpiCards(dashboardData);
+  renderCapacityCards(dashboardData);
+  renderSourceMetadata(dashboardData);
+  setLoadingState(false);
+  scheduleSlotDataPrefetch();
 
-      if (typeof window.renderExecutiveSupport === "function" && dashboardData.executiveSales) {
-        window.renderExecutiveSupport(dashboardData.executiveSales);
+  window.requestAnimationFrame(() => {
+    if (renderVersion !== dashboardState.renderVersion) {
+      return;
+    }
+
+    renderDashboardCharts(dashboardData.charts);
+    window.requestAnimationFrame(() => {
+      if (renderVersion !== dashboardState.renderVersion) {
+        return;
       }
 
-      if (window.executiveState?.monthlyActive && typeof window.showMonthlySalesView === "function") {
-        window.showMonthlySalesView(true);
-      } else if (window.executiveState?.trendsActive && typeof window.showSalesTrendsView === "function") {
-        window.showSalesTrendsView(true);
-      } else {
-        showDashboardView(dashboardState.activeView || dashboardState.currentView);
+      renderBranchPerformanceTable();
+      if (dashboardState.activeView === "slotUtilizationView") {
+        ensureSlotUtilizationData();
       }
+    });
+  });
+}
+function renderConnectionStatus() {
+  getElementById("modeText").textContent = dashboardState.localPreview
+    ? "Local preview — sample data"
+    : "Read-only live Sheet";
+  getElementById("modePill").style.borderColor = dashboardState.localPreview
+    ? "#f1d39a"
+    : "#cde8e4";
+  getElementById("modePill").style.color = dashboardState.localPreview
+    ? "#9a5a00"
+    : "var(--teal)";
+}
+function renderKpiCards(dashboardData) {
+  const dashboardKpis = dashboardData.kpis;
+  getElementById("kpiSales").textContent = formatCurrency(
+    dashboardKpis.sales,
+  );
+  getElementById("kpiSalesSub").textContent =
+    `${formatCount(dashboardData.health.salesRowsMatched)} matched sales rows`;
+  getElementById("kpiTarget").textContent =
+    dashboardKpis.targetAchievement == null
+      ? "—"
+      : formatPercent(dashboardKpis.targetAchievement);
+  getElementById("kpiTargetSub").textContent =
+    dashboardKpis.target > 0
+      ? `${formatCurrency(dashboardKpis.sales)} of ${formatCurrency(dashboardKpis.target)}`
+      : "No monthly target found in this selection";
+  getElementById("kpiTransactions").textContent = formatCount(
+    dashboardKpis.transactions,
+  );
+  getElementById("kpiTransactionsSub").textContent =
+    `Average ticket: ${formatCurrency(dashboardKpis.averageTicket)}`;
+  getElementById("kpiExpenses").textContent = formatCurrency(
+    dashboardKpis.expenses,
+  );
+  getElementById("kpiResult").textContent = formatCurrency(
+    dashboardKpis.salesLessDisbursements,
+  );
+  getElementById("resultCard").classList.toggle(
+    "negative",
+    dashboardKpis.salesLessDisbursements < 0,
+  );
+}
+function renderCapacityCards(dashboardData) {
+  const dashboardKpis = dashboardData.kpis;
+  renderCapacityMetric("tdc", dashboardKpis.tdcUtilization);
+  renderCapacityTrend(
+    "tdc",
+    dashboardKpis.tdcTrend,
+    getCapacityCoverage(dashboardData, "tdc"),
+  );
+  renderCapacityMetric("pdc", dashboardKpis.pdcUtilization);
+  renderCapacityTrend(
+    "pdc",
+    dashboardKpis.pdcTrend,
+    getCapacityCoverage(dashboardData, "pdc"),
+  );
+}
+function getCapacityCoverage(dashboardData, coursePrefix) {
+  const comparableBranches = (dashboardData.branches || []).filter(
+    (branch) => {
+      const trend = branch[`${coursePrefix}Trend`];
+      return trend && trend.changePercentagePoints != null;
+    },
+  ).length;
+  return { comparableBranches };
+}
+function renderSourceMetadata(dashboardData) {
+  getElementById("sourceName").textContent = dashboardState.localPreview
+    ? "Preview dataset"
+    : dashboardData.meta.spreadsheetName;
+  getElementById("sourceMeta").textContent =
+    `Data through ${
+      dashboardData.meta.dataAsOf
+        ? formatFriendlyDate(dashboardData.meta.dataAsOf)
+        : "—"
+    } · ` +
+    `${getSourceLoadLabel(dashboardData.meta)} · ` +
+    `Updated ${dashboardData.meta.refreshedAt} · ` +
+    `${formatCount(dashboardData.options.branches.length)} available branches`;
+  getElementById("trendBucket").textContent =
+    `${dashboardData.meta.trendBucket.toLowerCase()} view`;
+}
+function getSourceLoadLabel(dashboardMeta) {
+  if (dashboardState.localPreview) {
+    return "Local preview";
+  }
+  if (dashboardMeta.sourceCacheStatus === "HIT") {
+    return `Cached Sheet data (${dashboardMeta.sourceCacheMinutes} min max)`;
+  }
 
-      renderConnectionStatus();
-      renderKpiCards(dashboardData);
-      renderCapacityCards(dashboardData);
-      renderSourceMetadata(dashboardData);
-      setLoadingState(false);
-      scheduleSlotDataPrefetch();
-
-      window.requestAnimationFrame(() => {
-        if (renderVersion !== dashboardState.renderVersion) {
-          return;
-        }
-
-        renderDashboardCharts(dashboardData.charts);
-
-        window.requestAnimationFrame(() => {
-          if (renderVersion !== dashboardState.renderVersion) {
-            return;
-          }
-
-          renderBranchPerformanceTable();
-
-          if (dashboardState.activeView === "slotUtilizationView") {
-            ensureSlotUtilizationData();
-          }
-        });
-      });
-    }
-    function renderConnectionStatus() {
-      getElementById("modeText").textContent = dashboardState.localPreview
-        ? "Local preview — sample data"
-        : "Read-only live Sheet";
-      getElementById("modePill").style.borderColor = dashboardState.localPreview
-        ? "#f1d39a"
-        : "#cde8e4";
-      getElementById("modePill").style.color = dashboardState.localPreview
-        ? "#9a5a00"
-        : "var(--teal)";
-    }
-    function renderKpiCards(dashboardData) {
-      const dashboardKpis = dashboardData.kpis;
-
-      getElementById("kpiSales").textContent = formatCurrency(
-        dashboardKpis.sales,
-      );
-      getElementById("kpiSalesSub").textContent =
-        `${formatCount(dashboardData.health.salesRowsMatched)} matched sales rows`;
-      getElementById("kpiTarget").textContent =
-        dashboardKpis.targetAchievement == null
-          ? "—"
-          : formatPercent(dashboardKpis.targetAchievement);
-      getElementById("kpiTargetSub").textContent =
-        dashboardKpis.target > 0
-          ? `${formatCurrency(dashboardKpis.sales)} of ${formatCurrency(dashboardKpis.target)}`
-          : "No monthly target found in this selection";
-      getElementById("kpiTransactions").textContent = formatCount(
-        dashboardKpis.transactions,
-      );
-      getElementById("kpiTransactionsSub").textContent =
-        `Average ticket: ${formatCurrency(dashboardKpis.averageTicket)}`;
-      getElementById("kpiExpenses").textContent = formatCurrency(
-        dashboardKpis.expenses,
-      );
-      getElementById("kpiResult").textContent = formatCurrency(
-        dashboardKpis.salesLessDisbursements,
-      );
-      getElementById("resultCard").classList.toggle(
-        "negative",
-        dashboardKpis.salesLessDisbursements < 0,
-      );
-    }
-    function renderCapacityCards(dashboardData) {
-      const dashboardKpis = dashboardData.kpis;
-
-      renderCapacityMetric("tdc", dashboardKpis.tdcUtilization);
-      renderCapacityTrend(
-        "tdc",
-        dashboardKpis.tdcTrend,
-        getCapacityCoverage(dashboardData, "tdc"),
-      );
-      renderCapacityMetric("pdc", dashboardKpis.pdcUtilization);
-      renderCapacityTrend(
-        "pdc",
-        dashboardKpis.pdcTrend,
-        getCapacityCoverage(dashboardData, "pdc"),
-      );
-    }
-    function getCapacityCoverage(dashboardData, coursePrefix) {
-      const comparableBranches = (dashboardData.branches || []).filter(
-        (branch) => {
-          const trend = branch[`${coursePrefix}Trend`];
-          return trend && trend.changePercentagePoints != null;
-        },
-      ).length;
-
-      return { comparableBranches };
-    }
-    function renderSourceMetadata(dashboardData) {
-      getElementById("sourceName").textContent = dashboardState.localPreview
-        ? "Preview dataset"
-        : dashboardData.meta.spreadsheetName;
-      getElementById("sourceMeta").textContent =
-        `Data through ${
-          dashboardData.meta.dataAsOf
-            ? formatFriendlyDate(dashboardData.meta.dataAsOf)
-            : "—"
-        } · ` +
-        `${getSourceLoadLabel(dashboardData.meta)} · ` +
-        `Updated ${dashboardData.meta.refreshedAt} · ` +
-        `${formatCount(dashboardData.options.branches.length)} available branches`;
-      getElementById("trendBucket").textContent =
-        `${dashboardData.meta.trendBucket.toLowerCase()} view`;
-    }
-    function getSourceLoadLabel(dashboardMeta) {
-      if (dashboardState.localPreview) {
-        return "Local preview";
-      }
-
-      if (dashboardMeta.sourceCacheStatus === "HIT") {
-        return `Cached Sheet data (${dashboardMeta.sourceCacheMinutes} min max)`;
-      }
-
-      if (dashboardMeta.sourceCacheStatus === "BYPASSED") {
-        return "Fresh Sheet read (cache unavailable)";
-      }
-
-      return "Fresh Sheet read";
-    }
-    function renderDashboardCharts(dashboardCharts) {
-      renderSalesTrendChart(dashboardCharts.salesTrend);
-      renderServiceMixChart(dashboardCharts.serviceMix);
-      renderHorizontalBars(
-        "topBranchesChart",
-        dashboardCharts.topBranches,
-        formatCurrency,
-        true,
-      );
-      renderHorizontalBars(
-        "customerMixChart",
-        dashboardCharts.customerMix,
-        formatCount,
-        false,
-      );
-      renderHorizontalBars(
-        "expenseMixChart",
-        dashboardCharts.expenseMix,
-        formatCurrency,
-        false,
-      );
-    }
+  if (dashboardMeta.sourceCacheStatus === "BYPASSED") {
+    return "Fresh Sheet read (cache unavailable)";
+  }
+  return "Fresh Sheet read";
+}
+function renderDashboardCharts(dashboardCharts) {
+  renderSalesTrendChart(dashboardCharts.salesTrend);
+  renderServiceMixChart(dashboardCharts.serviceMix);
+  renderHorizontalBars(
+    "topBranchesChart",
+    dashboardCharts.topBranches,
+    formatCurrency,
+    true,
+  );
+  renderHorizontalBars(
+    "customerMixChart",
+    dashboardCharts.customerMix,
+    formatCount,
+    false,
+  );
+  renderHorizontalBars(
+    "expenseMixChart",
+    dashboardCharts.expenseMix,
+    formatCurrency,
+    false,
+  );
+}

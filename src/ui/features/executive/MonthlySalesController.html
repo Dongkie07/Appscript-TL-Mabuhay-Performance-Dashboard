@@ -140,7 +140,84 @@
       }
     }
 
+    function mainRequestWillPreloadSelectedMonth() {
+      if (
+        !executiveState.supportLoading &&
+        !isBaseDashboardStillLoading()
+      ) {
+        return false;
+      }
 
+      const selectedMonth =
+        document.getElementById("executiveMonthPicker")?.value || "";
+      const filters = readExecutiveFilters();
+      const endMonth = String(filters.endDate || "").slice(0, 7);
+
+      return Boolean(
+        /^\d{4}-\d{2}$/.test(selectedMonth) &&
+        selectedMonth === endMonth
+      );
+    }
+    function isBaseDashboardStillLoading() {
+      const salesValue = document.getElementById("kpiSales");
+      const text = String(salesValue?.textContent || "").trim();
+
+      return !/\d/.test(text);
+    }
+    function loadSelectedMonthSupport(forceRefresh) {
+      if (!isAppsScriptRuntime()) return;
+
+      const request = buildSelectedMonthRequest(forceRefresh === true);
+
+      if (!request) return;
+
+      const cacheKey = getMonthlyCacheKey(
+        request.monthValue,
+        request.filters.region,
+        request.filters.branch,
+      );
+
+      if (!forceRefresh && executiveState.monthlyCache[cacheKey]) {
+        renderMonthlySales(executiveState.monthlyCache[cacheKey]);
+        return;
+      }
+
+      if (executiveState.monthlyLoadingKey === cacheKey) return;
+
+      const requestVersion = executiveState.monthlyRequestVersion + 1;
+      executiveState.monthlyRequestVersion = requestVersion;
+      executiveState.monthlyLoadingKey = cacheKey;
+
+      google.script.run
+        .withSuccessHandler((supportData) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          cacheMonthlySupport(supportData);
+
+          if (
+            executiveState.monthlyActive &&
+            getSelectedMonthCacheKey() === cacheKey
+          ) {
+            renderMonthlySales(
+              executiveState.monthlyCache[cacheKey] || supportData,
+            );
+          }
+        })
+        .withFailureHandler((error) => {
+          if (requestVersion !== executiveState.monthlyRequestVersion) return;
+
+          executiveState.monthlyLoadingKey = "";
+          console.warn(
+            "Monthly sales detail could not be loaded:",
+            error?.message || error,
+          );
+          showMonthlyLoading(
+            "Monthly detail could not be loaded. Please try Refresh.",
+          );
+        })
+        .getExecutiveSalesSupport(request.filters);
+    }
 
     function buildSelectedMonthRequest(forceRefresh) {
       const value =

@@ -23,15 +23,14 @@ function readExpenseSource_(spreadsheet) {
       'EXPENSE AMOUNT',
       'AMOUNT'
     ]),
-    expenseType: findHeaderIndex_(headers, [
-      'TYPE OF EXPENSE',
-      'GL DESCRIPTION'
-    ])
+    typeOfExpense: findHeaderIndex_(headers, ['TYPE OF EXPENSE']),
+    glDescription: findHeaderIndex_(headers, ['GL DESCRIPTION'])
   };
 
   assertRequiredHeaderIndex_(expenseSheet, columns.branch, 'BRANCH');
   assertRequiredHeaderIndex_(expenseSheet, columns.date, 'DISBURSED DATE');
   assertRequiredHeaderIndex_(expenseSheet, columns.amount, 'LIQUIDATED EXPENSE');
+  assertRequiredHeaderIndex_(expenseSheet, columns.typeOfExpense, 'TYPE OF EXPENSE');
 
   const lastRow = expenseSheet.getLastRow();
   if (lastRow < 2) return { rows: [] };
@@ -76,14 +75,17 @@ function createExpenseRow_(
     dateCache
   );
   const amount = numberOrZero_(sourceRow[columns.amount]);
-  const expenseType = columns.expenseType >= 0
-    ? cleanText_(sourceRow[columns.expenseType])
+  const typeOfExpense = columns.typeOfExpense >= 0
+    ? cleanText_(sourceRow[columns.typeOfExpense])
+    : '';
+  const glDescription = columns.glDescription >= 0
+    ? cleanText_(sourceRow[columns.glDescription])
     : '';
   const region = columns.region >= 0
     ? normalizeRegion_(sourceRow[columns.region])
     : 'Unspecified';
 
-  if (!branchName && !date && amount === 0 && !expenseType) {
+  if (!branchName && !date && amount === 0 && !typeOfExpense && !glDescription) {
     return null;
   }
 
@@ -93,6 +95,7 @@ function createExpenseRow_(
     branchKey: normalizeKey_(branchName),
     date: date,
     amount: amount,
-    expenseType: expenseType || 'Unclassified'
+    typeOfExpense: typeOfExpense || 'Unclassified',
+    glDescription: glDescription || 'Unclassified'
   };
 }

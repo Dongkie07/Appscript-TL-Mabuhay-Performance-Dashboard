@@ -15,7 +15,6 @@ function buildSlotUtilizationData_(requestedFilters) {
   const salesSource = sourceResult.sources.sales;
 
   assertSalesDatesExist_(salesSource);
-
   const filters = normalizeFilters_(
     requestedFilters || {},
     salesSource.minDate,
@@ -35,7 +34,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       processingStartedAt
     );
   }
-
   const capacitySnapshots = Object.create(null);
   const weeklyBusiness = Object.create(null);
   let rowsMatched = 0;
@@ -48,7 +46,6 @@ function buildSlotUtilizationData_(requestedFilters) {
     if (!salesRow.date || !salesRow.branchKey) {
       continue;
     }
-
     const branchIdentity = resolveBranchIdentity_(
       salesRow,
       salesSource.canonicalBranches
@@ -71,7 +68,6 @@ function buildSlotUtilizationData_(requestedFilters) {
     if (hasCapacityData_(salesRow)) {
       rowsMatched += 1;
     }
-
     updateDetailedCapacitySnapshot_(
       capacitySnapshots,
       salesRow,
@@ -79,7 +75,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       branchIdentity.region
     );
   }
-
   const response = {
     meta: {
       spreadsheetName: spreadsheet.getName(),
@@ -119,7 +114,6 @@ function buildSlotUtilizationData_(requestedFilters) {
       cacheError
     );
   }
-
   return response;
 }
 
@@ -142,7 +136,6 @@ function recordWeeklyBranchBusiness_(
   }
 
   let weeklyRecord = branchWeeks[periodKey];
-
   if (!weeklyRecord) {
     weeklyRecord = {
       sales: 0,
@@ -171,25 +164,51 @@ function updateDetailedCapacitySnapshot_(
   branchName,
   region
 ) {
-  if (!hasCapacityData_(salesRow)) {
+  if (!salesRow || !hasCapacityData_(salesRow)) {
     return;
   }
 
-  const periodKey =
-    salesRow.year * 100 + salesRow.week;
-  let branchHistory =
-    capacitySnapshots[salesRow.branchKey];
+  const year = Number(salesRow.year);
+  const week = Number(salesRow.week);
+
+  // Detailed capacity reporting is weekly. Ignore unusable periods.
+  if (
+    !Number.isFinite(year) ||
+    year <= 0 ||
+    !Number.isFinite(week) ||
+    week <= 0
+  ) {
+    return;
+  }
+
+  // Keep numeric YYYYWW because SlotCapacityResponseService and
+  // weeklyBusiness currently use the same numeric identity.
+  const periodKey = year * 100 + week;
+
+  // Chronology is separate from identity.
+  const periodSortKey =
+    salesRow.date instanceof Date &&
+    !isNaN(salesRow.date.getTime())
+      ? salesRow.date.getTime()
+      : 0;
+
+  const branchKey = salesRow.branchKey;
+  if (!branchKey) {
+    return;
+  }
+
+  let branchHistory = capacitySnapshots[branchKey];
   if (!branchHistory) {
     branchHistory = {
       snapshots: Object.create(null)
     };
-    capacitySnapshots[salesRow.branchKey] =
-      branchHistory;
+    capacitySnapshots[branchKey] = branchHistory;
   }
 
   const snapshotKey = String(periodKey);
   const incomingSnapshot = createCapacitySnapshot_(
     periodKey,
+    periodSortKey,
     salesRow,
     branchName,
     region

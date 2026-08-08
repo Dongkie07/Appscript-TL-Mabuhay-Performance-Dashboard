@@ -1,7 +1,6 @@
 /**
  * SLSAch%-aligned executive and monthly reporting orchestration.
  */
-
 /**
  * Executive sales reporting aligned with the redesigned SLSAch% pivots.
  *
@@ -18,7 +17,6 @@
  * Overview encoded collections remain available from the base dashboard.
  * This file is read-only and never writes to the spreadsheet.
  */
-
 function buildDashboardDataWithMonthlyTargetFix_(requestedFilters) {
   const filters = requestedFilters || {};
   const dashboardData = buildDashboardData_(filters);
@@ -28,12 +26,10 @@ function buildDashboardDataWithMonthlyTargetFix_(requestedFilters) {
     forceRefresh: false
   });
   const executiveData = buildExecutiveSalesSupport_(executiveFilters);
-
   applyExecutiveDataToDashboard_(dashboardData, executiveData);
 
   return dashboardData;
 }
-
 function buildExecutiveSalesSupport_(requestedFilters) {
   const request = requestedFilters || {};
   const spreadsheet = getSpreadsheet_();
@@ -49,7 +45,6 @@ function buildExecutiveSalesSupport_(requestedFilters) {
     salesSource.maxDate
   );
   const resultType = 'EXECUTIVE_PERF_V13_CLEAN_ARCH';
-
   if (!forceRefresh) {
     const cached = readDashboardResultCache_(
       spreadsheet,
@@ -70,7 +65,6 @@ function buildExecutiveSalesSupport_(requestedFilters) {
     salesSource,
     filters
   );
-
   try {
     writeDashboardResultCache_(
       spreadsheet,
@@ -87,7 +81,6 @@ function buildExecutiveSalesSupport_(requestedFilters) {
 
   return response;
 }
-
 function buildExecutiveSalesDataFromSources_(
   spreadsheet,
   sourceResult,
@@ -107,7 +100,6 @@ function buildExecutiveSalesDataFromSources_(
     aggregation,
     sharedTrendBucketCache
   );
-
   /*
    * The current SLSAch% pivots use CATEGORY OF SALES V2 itself. The required
    * J:O and AZ:BI values are already present in the normalized sales source,
@@ -145,7 +137,6 @@ function buildExecutiveSalesDataFromSources_(
     MONTH: executiveBuildTrendSeries_(aggregation.encodedTrends.MONTH),
     YEAR: executiveBuildTrendSeries_(aggregation.encodedTrends.YEAR)
   };
-
   const response = {
     filtersApplied: {
       startDate: formatDate_(filters.startDate, timezone),
@@ -189,7 +180,6 @@ function buildExecutiveSalesDataFromSources_(
         ? sourceResult.cachedAt.toISOString()
         : String(sourceResult.cachedAt || '')
   };
-
   /*
    * Preload the month represented by the selected end date. This uses the
    * source data that is already in memory, so opening Monthly Sales does not
@@ -206,7 +196,6 @@ function buildExecutiveSalesDataFromSources_(
 
   return response;
 }
-
 function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   dashboardData.meta = dashboardData.meta || {};
   dashboardData.kpis = dashboardData.kpis || {};
@@ -214,53 +203,79 @@ function applyExecutiveDataToDashboard_(dashboardData, executiveData) {
   dashboardData.health = dashboardData.health || {};
   dashboardData.branches = dashboardData.branches || [];
 
-  /*
-   * Keep the Overview encoded-collection total, but align target achievement
-   * and branch performance with the current SLSAch% pivot calculations.
-   */
-  dashboardData.kpis.officialActualCollections =
-    executiveData.kpis.officialActualCollections;
-  dashboardData.kpis.target = executiveData.kpis.target;
-  dashboardData.kpis.targetAchievement =
-    executiveData.kpis.targetAchievement;
-  dashboardData.kpis.weightedTargetAchievement =
-    executiveData.kpis.weightedTargetAchievement;
-  dashboardData.kpis.reportedTargetProgress =
-    executiveData.kpis.reportedTargetProgress;
-  dashboardData.kpis.branchAchievementCount =
-    executiveData.kpis.branchAchievementCount;
-  dashboardData.kpis.encodedCollections =
-    executiveData.kpis.encodedCollections;
-  dashboardData.kpis.excludedCollections =
-    executiveData.kpis.excludedCollections;
+  const executiveKpis =
+    executiveData && executiveData.kpis
+      ? executiveData.kpis
+      : {};
+  const reconciliation =
+    executiveData && executiveData.reconciliation
+      ? executiveData.reconciliation
+      : {};
 
-  applyPivotBranchesToDashboard_(dashboardData, executiveData.branches || []);
+  dashboardData.kpis.officialActualCollections =
+    executiveKpis.officialActualCollections;
+  dashboardData.kpis.target = executiveKpis.target;
+  dashboardData.kpis.targetAchievement =
+    executiveKpis.targetAchievement;
+  dashboardData.kpis.weightedTargetAchievement =
+    executiveKpis.weightedTargetAchievement;
+  dashboardData.kpis.reportedTargetProgress =
+    executiveKpis.reportedTargetProgress;
+  dashboardData.kpis.branchAchievementCount =
+    executiveKpis.branchAchievementCount;
+  dashboardData.kpis.encodedCollections =
+    executiveKpis.encodedCollections;
+  dashboardData.kpis.excludedCollections =
+    executiveKpis.excludedCollections;
+
+  applyPivotBranchesToDashboard_(
+    dashboardData,
+    executiveData.branches || []
+  );
 
   dashboardData.meta.salesReportingRule =
     'OVERVIEW_ENCODED_MONTHLY_AND_BRANCH_SLSACH';
   dashboardData.meta.targetAchievementMethod =
-  'CUMULATIVE_ACTUAL_DIVIDED_BY_CUMULATIVE_TARGET';
+    'CUMULATIVE_ACTUAL_DIVIDED_BY_CUMULATIVE_TARGET';
   dashboardData.health.salesRowsExcludedFromTrends =
-    executiveData.reconciliation.excludedRows;
+    Number(reconciliation.excludedRows) || 0;
 
+  // Unified UI contract. Monthly Sales and Trends no longer make a
+  // second executive request, so all fields needed by those views must
+  // be forwarded here.
   dashboardData.executiveSales = {
-    reconciliation: executiveData.reconciliation,
-    officialAchievement: executiveData.officialAchievement,
+    filtersApplied: executiveData.filtersApplied || null,
+    kpis: executiveKpis,
+    reconciliation: reconciliation,
+    officialAchievement:
+      executiveData.officialAchievement || null,
     branchAchievementCount:
-      executiveData.branchAchievementCount,
+      Number(
+        executiveData.branchAchievementCount ??
+          executiveKpis.branchAchievementCount
+      ) || 0,
     weightedTargetAchievement:
-      executiveData.kpis.weightedTargetAchievement,
+      executiveKpis.weightedTargetAchievement == null
+        ? null
+        : executiveKpis.weightedTargetAchievement,
     reportedTargetProgress:
-      executiveData.kpis.reportedTargetProgress,
-    regions: executiveData.regions,
-    branches: executiveData.branches,
-    trends: executiveData.trends,
-    encodedTrends: executiveData.encodedTrends,
-    cacheStatus: executiveData.cacheStatus,
-    cachedAt: executiveData.cachedAt
+      executiveKpis.reportedTargetProgress == null
+        ? null
+        : executiveKpis.reportedTargetProgress,
+    regions: executiveData.regions || [],
+    branches: executiveData.branches || [],
+    trendMode: executiveData.trendMode || 'DAY',
+    trend: executiveData.trend || [],
+    trends: executiveData.trends || {},
+    encodedTrend: executiveData.encodedTrend || [],
+    encodedTrends: executiveData.encodedTrends || {},
+    serviceMix: executiveData.serviceMix || [],
+    topBranches: executiveData.topBranches || [],
+    monthlySnapshot: executiveData.monthlySnapshot || null,
+    cacheStatus: executiveData.cacheStatus || 'MISS',
+    cachedAt: executiveData.cachedAt || ''
   };
 }
-
 function applyPivotBranchesToDashboard_(dashboardData, pivotBranches) {
   const pivotByKey = Object.create(null);
   const dashboardByKey = Object.create(null);
@@ -268,14 +283,12 @@ function applyPivotBranchesToDashboard_(dashboardData, pivotBranches) {
   for (let index = 0; index < pivotBranches.length; index += 1) {
     pivotByKey[pivotBranches[index].branchKey] = pivotBranches[index];
   }
-
   for (let index = 0; index < dashboardData.branches.length; index += 1) {
     const branch = dashboardData.branches[index];
     const pivot = pivotByKey[branch.branchKey];
     dashboardByKey[branch.branchKey] = true;
 
     if (!pivot) continue;
-
     branch.branchName = pivot.branchName || branch.branchName;
     branch.region = pivot.region || branch.region;
     branch.sales = round2_(pivot.sales);
@@ -289,12 +302,10 @@ function applyPivotBranchesToDashboard_(dashboardData, pivotBranches) {
       branch.sales - numberOrZero_(branch.expenses)
     );
   }
-
   for (let index = 0; index < pivotBranches.length; index += 1) {
     const pivot = pivotBranches[index];
 
     if (dashboardByKey[pivot.branchKey]) continue;
-
     dashboardData.branches.push({
       branchKey: pivot.branchKey,
       branchName: pivot.branchName,
@@ -321,7 +332,6 @@ function applyPivotBranchesToDashboard_(dashboardData, pivotBranches) {
       pdcTrend: createUtilizationTrend_(null, null)
     });
   }
-
   dashboardData.branches.sort(function sortPivotBranches(first, second) {
     if (second.sales !== first.sales) {
       return second.sales - first.sales;

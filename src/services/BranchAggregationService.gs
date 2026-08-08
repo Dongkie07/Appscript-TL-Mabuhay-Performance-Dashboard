@@ -45,7 +45,7 @@ function aggregateExpenseRows_(
 
     addToMap_(
       aggregation.expenseMix,
-      expenseRow.expenseType,
+      expenseRow.typeOfExpense,
       expenseRow.amount
     );
   }

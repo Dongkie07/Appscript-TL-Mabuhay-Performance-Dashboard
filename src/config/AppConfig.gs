@@ -1,7 +1,6 @@
 /**
  * Project settings.
  */
-
 const DASHBOARD_CONFIG = Object.freeze({
   SPREADSHEET_ID: '',
   SALES_SHEET: 'CATEGORY OF SALES V2',
@@ -10,9 +9,9 @@ const DASHBOARD_CONFIG = Object.freeze({
   TITLE: 'TL Mabuhay Driving School Performance Dashboard',
   DEFAULT_WINDOW: 'LATEST_MONTH',
   SOURCE_CACHE_SECONDS: 15 * 60,
-  SOURCE_CACHE_VERSION: '2026-08-07-capacity-identity-v3',
+  SOURCE_CACHE_VERSION: '2026-08-08-expense-mix-v1',
   RESULT_CACHE_SECONDS: 15 * 60,
-  RESULT_CACHE_VERSION: '2026-08-07-achievement-v2',
+  RESULT_CACHE_VERSION: '2026-08-08-expense-mix-v1',
   CACHE_CHUNK_CHARACTERS: 70000,
   CACHE_WRITE_BATCH_SIZE: 20,
   CACHE_LOCK_TIMEOUT_MS: 12000,
