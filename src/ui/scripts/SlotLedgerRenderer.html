@@ -600,6 +600,10 @@
       period.className = "slot-both-period";
       period.textContent = latest.periodLabel || "Latest record";
 
+      const recordGroup = document.createElement("span");
+      recordGroup.className = "slot-both-record-group";
+      recordGroup.append(tag, period);
+
       const detail = document.createElement("span");
       detail.className = "slot-both-detail mono";
       detail.textContent =
@@ -611,6 +615,10 @@
       idle.className = "slot-both-idle mono";
       idle.textContent =
         latest.idle != null ? `${formatCount(latest.idle)} idle` : "";
+
+      const meterGroup = document.createElement("span");
+      meterGroup.className = "slot-both-meter-group";
+      meterGroup.append(meter, idle);
 
       const pct = document.createElement("strong");
       pct.className = `slot-both-pct ${level}`;
@@ -630,6 +638,6 @@
         trendBadge.textContent = `${presentation.symbol} ${presentation.label}`;
       }
 
-      line.append(tag, period, detail, meter, idle, pct, trendBadge);
+      line.append(recordGroup, detail, meterGroup, pct, trendBadge);
       return line;
     }

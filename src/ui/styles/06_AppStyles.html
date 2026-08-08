@@ -93,8 +93,7 @@
       padding: 19px 15px;
       border-radius: 15px;
     }
-    .slot-summary-grid,
-    .slot-dashboard-toolbar {
+    .slot-summary-grid {
       grid-template-columns: 1fr;
     }
     .slot-toolbar-count {
@@ -105,22 +104,59 @@
       padding-inline: 13px;
     }
     .slot-ledger-row {
-      grid-template-columns: 1fr;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      background: #fff;
     }
+    .slot-ledger-row:hover {
+      margin-inline: 0;
+      width: 100%;
+      border-color: #cbd4df;
+    }
+    
     .slot-meter-cell,
     .slot-utilization-cell,
-    .slot-ledger-trend {
-      grid-column: 1;
-      grid-row: auto;
-    }
-    .slot-allocation-cell,
-    .slot-utilization-cell {
-      text-align: left;
-    }
-    .slot-ledger-trend {
+    .slot-ledger-trend,
+    .slot-allocation-cell {
       display: flex;
-      align-items: flex-start;
-      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      text-align: right;
+    }
+    
+    .slot-allocation-cell::before {
+      content: "Allocation";
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .slot-utilization-cell::before {
+      content: "Utilization";
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .slot-ledger-trend::before {
+      content: "Trend";
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .slot-ledger-trend small, .slot-ledger-trend em {
+      display: none;
     }
     .donut-layout {
       grid-template-columns: 1fr;
@@ -262,15 +298,15 @@
   .slot-segment-meter.low i.active { background: #c2414c; }
   .slot-segment-meter.moderate i.active { background: #d99a14; }
   .slot-segment-meter.high i.active { background: #16835b; }
-  .slot-segment-meter.overCapacity i.active { background: #7c3aed; }
+  .slot-segment-meter.overCapacity i.active { background: #B7791F; }
   .slot-utilization-cell strong.low { color: #c2414c; }
   .slot-utilization-cell strong.moderate { color: #b77908; }
   .slot-utilization-cell strong.high { color: #16835b; }
-  .slot-utilization-cell strong.overCapacity { color: #7c3aed; }
+  .slot-utilization-cell strong.overCapacity { color: #8A5A00; }
   .slot-utilization-legend i.low { background: #c2414c; }
   .slot-utilization-legend i.moderate { background: #d99a14; }
   .slot-utilization-legend i.high { background: #16835b; }
-  .slot-utilization-legend i.overCapacity { background: #7c3aed; }
+  .slot-utilization-legend i.overCapacity { background: #B7791F; }
 
   .field-help {
     min-height: 14px;

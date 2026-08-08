@@ -65,7 +65,7 @@
   }
 
   .slot-progress-fill.over-capacity {
-    background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+    background: linear-gradient(90deg, #d4a350 0%, #B7791F 100%);
   }
 
   .slot-stat-grid {
@@ -302,11 +302,9 @@
   }
 
   .slot-dashboard-toolbar {
-    display: grid;
-    grid-template-columns:
-      auto minmax(180px, 0.75fr) minmax(190px, 0.85fr)
-      minmax(220px, 1fr) auto;
-    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
     gap: 11px;
     margin-top: 14px;
     padding: 13px;
@@ -323,7 +321,7 @@
 
   .slot-course-tab {
     min-width: 66px;
-    min-height: 40px;
+    min-height: 44px;
     border: 1px solid var(--line);
     border-radius: 9px;
     background: #f8fafb;
@@ -341,7 +339,8 @@
 
   .slot-toolbar-field {
     display: flex;
-    min-width: 0;
+    min-width: 140px;
+    flex: 1;
     flex-direction: column;
     gap: 5px;
   }
@@ -357,7 +356,7 @@
   .slot-toolbar-field select,
   .slot-toolbar-field input {
     width: 100%;
-    min-height: 40px;
+    min-height: 44px;
     padding: 0 10px;
     border: 1px solid var(--line);
     border-radius: 9px;
